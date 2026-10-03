@@ -1,66 +1,51 @@
 import os
 import sys
-import socket
+import time
+import hmac
+import shutil
 import signal
 import tempfile
+import threading
 import subprocess
+from collections import defaultdict, deque
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = getattr(config, "SECRET_KEY", "python-editor-secret-key-change-me")
+app.config["SECRET_KEY"] = config.SECRET_KEY
+# Render sits behind a proxy: trust one hop so request.remote_addr is the real client IP
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+_slots = threading.BoundedSemaphore(config.MAX_CONCURRENT_RUNS)
+_hits = defaultdict(deque)
+_hits_lock = threading.Lock()
+
+# Small launcher: applies resource limits, then replaces itself with the
+# isolated Python process that runs the student's program (limits survive exec).
+_LAUNCHER = """
+import os, sys
+try:
+    import resource
+    cpu, mem, fsize = (int(x) for x in sys.argv[2:5])
+    resource.setrlimit(resource.RLIMIT_CPU,   (cpu, cpu))
+    resource.setrlimit(resource.RLIMIT_AS,    (mem, mem))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
+    resource.setrlimit(resource.RLIMIT_CORE,  (0, 0))
+except Exception:
+    pass
+os.execv(sys.executable, [sys.executable, "-I", "-B", sys.argv[1]])
+"""
 
 
 # ------------------------------------------------------------
 #  Helpers
 # ------------------------------------------------------------
 
-def _get_local_ip():
-    """Detect LAN IP address for easy mobile testing."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # Does not actually create a connection, just resolves routing
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-    except Exception:
-        ip = "127.0.0.1"
-    finally:
-        s.close()
-    return ip
-
-
-def _apply_resource_limits():
-    """Apply CPU + memory limits to the child process (POSIX only)."""
-    try:
-        import resource
-        # CPU seconds
-        resource.setrlimit(
-            resource.RLIMIT_CPU,
-            (config.CPU_LIMIT, config.CPU_LIMIT),
-        )
-        # Address space (memory)
-        resource.setrlimit(
-            resource.RLIMIT_AS,
-            (config.MEMORY_LIMIT, config.MEMORY_LIMIT),
-        )
-        # No core dumps
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    except Exception:
-        # Limits unavailable (e.g. Windows) – continue without them.
-        pass
-
-
-def _child_preexec():
-    """Prepare child execution environment: process group & resource limits."""
-    if hasattr(os, "setsid"):
-        os.setsid()
-    _apply_resource_limits()
-
-
 def _sanitize(text, temp_path):
-    """Replace the temporary file path with 'main.py' in tracebacks."""
+    """Show 'main.py' instead of the real temporary path in tracebacks."""
     if not text:
         return ""
     if temp_path:
@@ -77,6 +62,77 @@ def _truncate(text, limit):
     return text or ""
 
 
+def _read(path, limit):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read(limit + 1)
+    except OSError:
+        return ""
+
+
+def _clean_env(workdir):
+    """Pass NOTHING from the server's environment (SECRET_KEY, passwords...) to student code."""
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "HOME": workdir,
+        "TMPDIR": workdir,
+        "LANG": "C.UTF-8",
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    if os.name == "nt":
+        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+    return env
+
+
+def _rate_limited(ip):
+    now = time.time()
+    with _hits_lock:
+        if len(_hits) > 5000:                      # keep memory bounded
+            for key in [k for k, q in _hits.items() if not q or now - q[-1] > config.RATE_LIMIT_WINDOW]:
+                del _hits[key]
+        q = _hits[ip]
+        while q and now - q[0] > config.RATE_LIMIT_WINDOW:
+            q.popleft()
+        if len(q) >= config.RATE_LIMIT_MAX:
+            return True
+        q.append(now)
+        return False
+
+
+def _kill(proc):
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    try:
+        proc.wait(timeout=2)
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------
+#  Optional site-wide password (set BASIC_AUTH_USER / BASIC_AUTH_PASS)
+# ------------------------------------------------------------
+
+@app.before_request
+def _require_login():
+    if not (config.BASIC_AUTH_USER and config.BASIC_AUTH_PASS):
+        return None
+    if request.path == "/health":
+        return None
+    auth = request.authorization
+    if auth:
+        user_ok = hmac.compare_digest((auth.username or "").encode(), config.BASIC_AUTH_USER.encode())
+        pass_ok = hmac.compare_digest((auth.password or "").encode(), config.BASIC_AUTH_PASS.encode())
+        if user_ok and pass_ok:
+            return None
+    return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="PyOlympiad"'})
+
+
 # ------------------------------------------------------------
 #  Routes
 # ------------------------------------------------------------
@@ -86,11 +142,16 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/health")
+def health():
+    return "ok", 200
+
+
 @app.route("/run", methods=["POST"])
 def run_code():
     data = request.get_json(silent=True) or {}
 
-    code = data.get("code", "")
+    code       = data.get("code", "")
     user_input = data.get("input", "")
 
     if not isinstance(code, str):
@@ -98,7 +159,6 @@ def run_code():
     if not isinstance(user_input, str):
         user_input = ""
 
-    # ---------- Size validation ----------
     if len(code) > config.MAX_CODE_SIZE:
         return jsonify({"success": False, "output": "", "error": "Code is too large."}), 400
     if len(user_input) > config.MAX_INPUT_SIZE:
@@ -106,73 +166,66 @@ def run_code():
     if not code.strip():
         return jsonify({"success": False, "output": "", "error": "Please enter some Python code."}), 400
 
-    temp_path = None
+    if _rate_limited(request.remote_addr or "unknown"):
+        return jsonify({"success": False, "output": "",
+                        "error": "Too many runs in a short time. Please wait a few seconds and try again."}), 429
+
+    if not _slots.acquire(blocking=False):
+        return jsonify({"success": False, "output": "",
+                        "error": "The server is busy running other programs. Please try again in a moment."}), 503
+
+    workdir = None
     proc = None
-
     try:
-        # ---------- Write code to a temp file ----------
-        fd, temp_path = tempfile.mkstemp(suffix=".py", text=True)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        # Every run gets its own private folder, deleted afterwards
+        workdir   = tempfile.mkdtemp(prefix="pyrun_")
+        temp_path = os.path.join(workdir, "main.py")
+        in_path   = os.path.join(workdir, ".stdin")
+        out_path  = os.path.join(workdir, ".stdout")
+        err_path  = os.path.join(workdir, ".stderr")
+
+        with open(temp_path, "w", encoding="utf-8") as f:
             f.write(code)
+        with open(in_path, "w", encoding="utf-8") as f:
+            f.write(user_input)
 
-        # ---------- Spawn an isolated Python process ----------
-        # -I : isolated mode (no user site, no env imports)
-        # -B : don't write .pyc files
-        cmd = [sys.executable, "-I", "-B", temp_path]
+        if os.name == "posix":
+            cmd = [sys.executable, "-I", "-c", _LAUNCHER, temp_path,
+                   str(config.CPU_LIMIT), str(config.MEMORY_LIMIT), str(config.MAX_FILE_BYTES)]
+        else:
+            cmd = [sys.executable, "-I", "-B", temp_path]
 
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=os.path.dirname(temp_path),
-            preexec_fn=_child_preexec if sys.platform != "win32" else None,
-        )
-
-        # ---------- Communicate (with timeout) ----------
-        try:
-            stdout, stderr = proc.communicate(
-                input=user_input,
-                timeout=config.CODE_TIMEOUT,
+        # stdin/stdout/stderr are plain files (size-capped by RLIMIT_FSIZE),
+        # so a program that prints forever cannot fill the server's memory.
+        with open(in_path, "rb") as fin, open(out_path, "wb") as fout, open(err_path, "wb") as ferr:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=fin, stdout=fout, stderr=ferr,
+                cwd=workdir,
+                env=_clean_env(workdir),
+                start_new_session=(os.name == "posix"),
             )
-        except subprocess.TimeoutExpired:
-            # Kill the process or process group on timeout
             try:
-                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                else:
-                    proc.kill()
-            except Exception:
-                proc.kill()
+                proc.wait(timeout=config.CODE_TIMEOUT)
+                timed_out = False
+            except subprocess.TimeoutExpired:
+                _kill(proc)
+                timed_out = True
 
-            try:
-                proc.wait(timeout=2)
-            except Exception:
-                pass
-
-            return jsonify({
-                "success": False,
-                "output": "",
-                "error": (
-                    "Program execution timed out.\n"
-                    "Please check your code for an infinite loop "
-                    "or missing input()."
-                ),
-            })
-
-        # ---------- Truncate & sanitize ----------
-        stdout = _truncate(stdout, config.MAX_OUTPUT_SIZE)
-        stderr = _truncate(stderr, config.MAX_OUTPUT_SIZE)
+        stdout = _truncate(_read(out_path, config.MAX_OUTPUT_SIZE), config.MAX_OUTPUT_SIZE)
+        stderr = _truncate(_read(err_path, config.MAX_OUTPUT_SIZE), config.MAX_OUTPUT_SIZE)
         stderr = _sanitize(stderr, temp_path)
 
-        # ---------- Return response ----------
-        if proc.returncode == 0:
+        if timed_out:
             return jsonify({
-                "success": True,
+                "success": False,
                 "output": stdout,
-                "error": "",
+                "error": ("Program execution timed out.\n"
+                          "Please check your code for an infinite loop or missing input()."),
             })
+
+        if proc.returncode == 0:
+            return jsonify({"success": True, "output": stdout, "error": ""})
 
         return jsonify({
             "success": False,
@@ -180,35 +233,21 @@ def run_code():
             "error": stderr or f"Program exited with code {proc.returncode}.",
         })
 
-    except Exception as error:
-        return jsonify({
-            "success": False,
-            "output": "",
-            "error": str(error),
-        })
+    except Exception:
+        app.logger.exception("run failed")
+        return jsonify({"success": False, "output": "", "error": "Internal server error. Please try again."}), 500
 
     finally:
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
+        if proc is not None and proc.poll() is None:
+            _kill(proc)
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        _slots.release()
 
 
 # ------------------------------------------------------------
-#  Entry point
+#  Entry point (local development only; Render uses gunicorn)
 # ------------------------------------------------------------
 
 if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = getattr(config, "PORT", 5000)
-    debug = getattr(config, "DEBUG", True)
-    local_ip = _get_local_ip()
-
-    print("\n" + "=" * 54)
-    print(" Python Web Compiler Ready")
-    print(f" Local Machine : http://127.0.0.1:{port}")
-    print(f" Mobile / LAN  : http://{local_ip}:{port}")
-    print("=" * 54 + "\n")
-
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
