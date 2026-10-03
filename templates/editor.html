@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ problem.title }} · PyPractice{% endblock %}
+
+{% block content %}
+
+<!-- Mobile tabs -->
+<div class="mobile-tabs" id="mobileTabs">
+    <button class="mobile-tab active" data-target="problem-panel">📋 Problem</button>
+    <button class="mobile-tab" data-target="editor-panel">💻 Code</button>
+    <button class="mobile-tab" data-target="output-panel">▶ Output</button>
+</div>
+
+<div class="editor-layout">
+
+    <!-- Problem panel -->
+    <aside class="panel problem-panel" id="problem-panel">
+        <div class="panel-header">
+            <span class="badge badge-{{ problem.difficulty | lower }}">{{ problem.difficulty }}</span>
+            <span class="badge badge-muted">{{ problem.category }}</span>
+        </div>
+        <h2 class="problem-title">{{ problem.title }}</h2>
+        <div class="problem-description">{{ problem.description }}</div>
+
+        {% if problem.examples %}
+        <div class="examples">
+            <h4>Examples</h4>
+            {% for ex in problem.examples %}
+            <div class="example">
+                <div class="example-row">
+                    <span class="example-label">Input</span>
+                    <pre class="example-code">{{ ex.input or '(none)' }}</pre>
+                </div>
+                <div class="example-row">
+                    <span class="example-label">Output</span>
+                    <pre class="example-code">{{ ex.output }}</pre>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </aside>
+
+    <!-- Editor panel -->
+    <section class="panel editor-panel" id="editor-panel">
+        <div class="editor-toolbar">
+            <div class="toolbar-left">
+                <button class="btn btn-primary" id="runBtn">
+                    <span class="btn-icon">▶</span> Run
+                </button>
+                <button class="btn btn-success" id="testBtn">
+                    <span class="btn-icon">✓</span> Submit
+                </button>
+                <button class="btn btn-ghost" id="resetBtn" title="Reset to starter code">
+                    ↺ Reset
+                </button>
+            </div>
+            <div class="toolbar-right">
+                <span class="status-pill" id="statusPill">Ready</span>
+            </div>
+        </div>
+
+        <div class="editor-wrap">
+            <textarea id="codeEditor">{{ problem.starter_code }}</textarea>
+        </div>
+    </section>
+
+    <!-- Output panel -->
+    <section class="panel output-panel" id="output-panel">
+        <div class="panel-tabs">
+            <button class="panel-tab active" data-tab="output">Output</button>
+            <button class="panel-tab" data-tab="tests">Test Results</button>
+        </div>
+
+        <div class="tab-content active" id="tab-output">
+            <div class="output-area" id="outputArea">
+                <div class="output-placeholder">
+                    Click <strong>Run</strong> to see your program's output here.
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-tests">
+            <div class="tests-area" id="testsArea">
+                <div class="output-placeholder">
+                    Click <strong>Submit</strong> to run the test cases.
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- hidden data for JS -->
+<script>
+    window.PROBLEM_ID = "{{ problem.id }}";
+    window.TEST_CASES = {{ problem.test_cases | tojson }};
+    window.STARTER_CODE = {{ problem.starter_code | tojson }};
+</script>
+{% endblock %}

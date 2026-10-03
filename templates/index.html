@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>PyOlympiad | Kakatiya Olympiad School</title>
+<link rel="icon" href="https://i.ibb.co/j9JrF3R5/Vibrant-Gradient-Ribbon-M-Logo.png">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --green: #10a37f;
+    --green-dark: #0b8f70;
+    --blue: #3776ab;
+    --background: #f6f7f9;
+    --white: #ffffff;
+    --border: #e5e7eb;
+    --border-light: #eeeeee;
+    --text: #202124;
+    --muted: #9ca3af;
+    --error: #dc2626;
+    --editor-background: #ffffff;
+    --console-background: #fbfbfc;
+    --header-height: 58px;
+    --panel-header: 43px;
+    --splitter: 10px;
+    --code-font: 14px;
+    --code-lh: 22px;
+}
+
+html, body { height: 100%; }
+
+body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    -webkit-text-size-adjust: 100%;
+}
+body.dragging { user-select: none; -webkit-user-select: none; }
+body.dragging.col { cursor: col-resize; }
+body.dragging.row { cursor: row-resize; }
+
+/* ================= HEADER ================= */
+.topbar {
+    height: var(--header-height);
+    flex-shrink: 0;
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px;
+    gap: 10px;
+    position: relative; z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-logo {
+    width: 40px; height: 40px; flex-shrink: 0;
+    object-fit: contain;
+    background: none; border: none; border-radius: 0;
+    display: block;
+}
+.brand-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.brand-name { font-size: 16px; font-weight: 650; color: #202124; white-space: nowrap; }
+.brand-subtitle { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.language {
+    height: 34px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 7px; background: white;
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: #4b5563; white-space: nowrap;
+}
+.python-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+
+.run-button, .stop-button {
+    height: 36px; border: none; border-radius: 7px; color: white;
+    padding: 0 17px; font-size: 13px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    transition: 0.15s ease;
+}
+.run-button { background: var(--green); }
+.run-button:hover { background: var(--green-dark); }
+.run-button:disabled { opacity: 0.65; cursor: not-allowed; }
+.stop-button { background: #ef4444; display: none; }
+.stop-button:hover { background: #dc2626; }
+.stop-button.visible { display: flex; }
+.run-button.hidden { display: none; }
+
+button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+}
+
+/* ================= WORKSPACE ================= */
+.workspace {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: row;
+    overflow: hidden;
+}
+
+/* ================= EDITOR ================= */
+.editor-section {
+    flex: 1 1 0;
+    min-width: 0; min-height: 0;
+    background: var(--editor-background);
+    display: flex; flex-direction: column;
+}
+.editor-toolbar {
+    height: var(--panel-header); flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 13px; gap: 10px;
+}
+.file-name { color: #374151; font-size: 13px; flex-shrink: 0; }
+.toolbar-buttons {
+    display: flex; gap: 7px; min-width: 0;
+    overflow-x: auto; scrollbar-width: none;
+}
+.toolbar-buttons::-webkit-scrollbar { display: none; }
+.toolbar-buttons > * { flex-shrink: 0; }
+
+.tool-button {
+    height: 29px; border: 1px solid var(--border); border-radius: 6px;
+    background: white; padding: 0 10px; font-size: 12px; color: #6b7280;
+    cursor: pointer; transition: 0.15s; white-space: nowrap;
+    font-family: inherit;
+}
+.tool-button:hover { background: #f7f7f8; color: #374151; }
+.font-buttons { display: flex; gap: 4px; }
+.font-buttons .tool-button { width: 30px; padding: 0; font-weight: 600; }
+.lbl-short { display: none; }
+
+.editor-container { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+.editor {
+    position: absolute; inset: 0;
+    display: flex; overflow: hidden;
+    font-family: "Fira Code", "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: var(--code-font); line-height: var(--code-lh);
+}
+.line-numbers {
+    width: 54px; flex-shrink: 0; padding-top: 14px;
+    background: #fafafa; border-right: 1px solid #eeeeee;
+    color: #9ca3af; text-align: right; padding-right: 13px;
+    user-select: none; overflow: hidden;
+}
+.line-number { height: var(--code-lh); font-size: calc(var(--code-font) - 1px); }
+.line-number.current { color: #374151; font-weight: 600; }
+.line-number.error { color: var(--error); font-weight: 700; }
+.line-number.error::before { content: "● "; font-size: 8px; vertical-align: middle; }
+
+.code-area { flex: 1; min-width: 0; position: relative; }
+
+#highlightLayer,
+#codeEditor {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    margin: 0;
+    padding: 14px 18px;
+    border: none; outline: none;
+    font-family: "Fira Code", "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: var(--code-font);
+    line-height: var(--code-lh);
+    letter-spacing: normal;
+    tab-size: 4;
+    white-space: pre;
+    word-wrap: normal;
+    overflow: auto;
+}
+#highlightLayer {
+    background: white;
+    color: #1f2937;
+    pointer-events: none;
+    scrollbar-width: none;
+}
+#highlightLayer::-webkit-scrollbar { display: none; }
+#highlightLayer code {
+    font: inherit; background: none; padding: 0; margin: 0;
+    white-space: inherit; display: block; text-shadow: none;
+}
+#codeEditor {
+    resize: none;
+    background: transparent;
+    color: transparent;
+    caret-color: #111827;
+}
+#codeEditor::selection { background: rgba(16, 163, 127, 0.22); }
+#codeEditor::placeholder { color: #b4b8bd; }
+
+.token.comment                       { color: #8b949e; font-style: italic; }
+.token.string, .token.triple-quoted-string,
+.token.char                          { color: #0a7d5a; }
+.token.number, .token.boolean        { color: #c2410c; }
+.token.keyword                       { color: #7c3aed; font-weight: 500; }
+.token.builtin, .token.class-name    { color: #0369a1; }
+.token.function                      { color: #2563eb; }
+.token.decorator, .token.annotation  { color: #b45309; }
+.token.operator, .token.punctuation  { color: #4b5563; }
+.token.interpolation .token.interpolation-punctuation { color: #c2410c; }
+
+/* Show operators exactly as typed (>= stays >=, not a single "≥" ligature) */
+.editor, #highlightLayer, #highlightLayer code, #codeEditor, .output-console, .input-field, .input-prompt {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0, "clig" 0;
+    -webkit-font-feature-settings: "liga" 0, "calt" 0, "clig" 0;
+}
+
+.editor-status {
+    height: 30px; flex-shrink: 0;
+    border-top: 1px solid var(--border); background: white;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px; color: #8a8f98; font-size: 11px; gap: 10px;
+    white-space: nowrap; overflow: hidden;
+}
+.status-group { display: flex; align-items: center; gap: 12px; }
+
+/* ================= SPLITTER ================= */
+.splitter {
+    flex: 0 0 var(--splitter);
+    background: var(--border-light);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    cursor: col-resize;
+    position: relative;
+    touch-action: none;
+    z-index: 5;
+    transition: background 0.15s;
+}
+.splitter::before { content: ""; position: absolute; inset: 0 -7px; }
+.splitter::after {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    width: 3px; height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 2px; background: #c4c9d0;
+}
+.splitter:hover, .splitter.active { background: rgba(16, 163, 127, 0.18); }
+.splitter:hover::after, .splitter.active::after { background: var(--green); }
+
+/* ================= RIGHT SECTION ================= */
+.right-section {
+    flex: 0 0 38%;
+    min-width: 0; min-height: 0;
+    background: var(--console-background);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+}
+
+.input-section {
+    display: none; background: white;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+    max-height: 50%;
+    flex-direction: column;
+}
+.input-section.visible { display: flex; }
+.input-header {
+    height: 42px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px;
+}
+.input-header-right { display: flex; align-items: center; gap: 10px; }
+.input-title { font-size: 13px; font-weight: 600; color: #374151; }
+.input-status { font-size: 11px; color: #f59e0b; }
+.input-body { padding: 12px 14px 14px; overflow-y: auto; min-height: 0; }
+.input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.input-row:last-child { margin-bottom: 0; }
+.input-prompt {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; color: #374151; max-width: 55%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.input-field {
+    flex: 1; min-width: 80px; height: 32px;
+    border: 1px solid #d8dce1; border-radius: 6px; outline: none;
+    padding: 0 9px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; color: #202124; background: white;
+}
+.input-field:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.10);
+}
+
+.output-section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.output-header {
+    height: var(--panel-header); flex-shrink: 0; background: white;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 0 14px; gap: 8px;
+}
+.output-title { font-size: 13px; font-weight: 600; color: #374151; }
+.output-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.output-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9ca3af; white-space: nowrap; }
+.small-button {
+    height: 26px; border: 1px solid var(--border); border-radius: 5px;
+    background: white; padding: 0 9px; font-size: 11px; color: #6b7280;
+    cursor: pointer; display: none; transition: 0.15s; white-space: nowrap;
+}
+.small-button.visible { display: inline-block; }
+.small-button:hover { background: #f7f7f8; color: #374151; }
+.collapse-button { display: none; width: 28px; padding: 0; font-size: 12px; }
+
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; }
+.status-dot.ready   { background: #22c55e; }
+.status-dot.running { background: #f59e0b; }
+.status-dot.error   { background: #ef4444; }
+
+.output-console {
+    flex: 1; min-height: 0; overflow: auto; padding: 15px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px; line-height: 21px; color: #374151;
+    white-space: pre-wrap; word-break: break-word;
+}
+.output-placeholder { color: #a1a7af; font-family: Inter, Arial, sans-serif; font-size: 12px; }
+.output-error { color: var(--error); white-space: pre-wrap; }
+.error-link { color: #b91c1c; text-decoration: underline; cursor: pointer; font-weight: 600; }
+.error-link:hover { color: #7f1d1d; }
+
+.right-section.collapsed .output-console,
+.right-section.collapsed .input-section { display: none; }
+
+/* ================= TABLET / MOBILE: STACKED ================= */
+@media (max-width: 850px) {
+    .workspace { flex-direction: column; }
+    .editor-section { min-height: 140px; }
+    .splitter {
+        cursor: row-resize;
+        border-left: none; border-right: none;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+    }
+    .splitter::before { inset: -7px 0; }
+    .splitter::after  { width: 36px; height: 3px; }
+    .right-section { flex: 0 0 40%; width: 100%; }
+    .collapse-button { display: inline-block; }
+    .input-body { max-height: 28vh; }
+}
+
+/* ================= SMALL PHONES ================= */
+@media (max-width: 600px) {
+    :root { --header-height: 52px; }
+    .topbar { padding: 0 11px; }
+    .brand-subtitle { font-size: 10px; }
+    .brand-name { font-size: 15px; }
+    .brand-logo { width: 34px; height: 34px; }
+    .language { display: none; }
+    .run-button, .stop-button { padding: 0 14px; height: 34px; }
+    .editor-toolbar { padding: 0 10px; }
+    .font-buttons { display: none; }
+    .lbl-full { display: none; }
+    .lbl-short { display: inline; }
+    .line-numbers { width: 40px; padding-right: 8px; }
+    #highlightLayer, #codeEditor { padding: 14px 10px; }
+    .editor-status .hide-sm { display: none; }
+    .output-console { padding: 12px; }
+    .output-status #statusText { display: none; }
+}
+@media (max-width: 380px) {
+    .brand-name { font-size: 14px; }
+    .brand { gap: 8px; }
+    .tool-button { padding: 0 8px; }
+}
+
+/* ================= SHORT LANDSCAPE SCREENS ================= */
+@media (max-height: 480px) and (max-width: 850px) {
+    :root { --header-height: 46px; --panel-header: 36px; }
+    .editor-status { display: none; }
+}
+
+/* ================= TOUCH DEVICES ================= */
+@media (pointer: coarse) {
+    .input-field { font-size: 16px; height: 38px; }
+    .tool-button, .small-button { height: 34px; }
+    .collapse-button { width: 34px; }
+    :root { --splitter: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <img class="brand-logo" src="https://i.ibb.co/j9JrF3R5/Vibrant-Gradient-Ribbon-M-Logo.png" alt="PyOlympiad logo">
+        <div class="brand-info">
+            <div class="brand-name">PyOlympiad</div>
+            <div class="brand-subtitle">Kakatiya Olympiad School</div>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="language">
+            <span class="python-dot"></span>
+            Python 3
+        </div>
+        <button class="run-button" id="runButton" title="Run (Ctrl+Enter)">
+            <span>▶</span>
+            <span id="runButtonText">Run</span>
+        </button>
+        <button class="stop-button" id="stopButton">
+            <span>■</span>
+            <span>Stop</span>
+        </button>
+    </div>
+</header>
+
+<main class="workspace" id="workspace">
+
+    <section class="editor-section">
+        <div class="editor-toolbar">
+            <div class="file-name">main.py</div>
+            <div class="toolbar-buttons">
+                <div class="font-buttons">
+                    <button class="tool-button" id="fontDown" title="Smaller text" aria-label="Decrease font size">A−</button>
+                    <button class="tool-button" id="fontUp" title="Larger text" aria-label="Increase font size">A+</button>
+                </div>
+                <button class="tool-button" id="copyCodeButton" title="Copy code">Copy</button>
+                <button class="tool-button" id="downloadButton" title="Download main.py" aria-label="Download main.py">
+                    <span class="lbl-full">Download</span><span class="lbl-short">⬇</span>
+                </button>
+                <button class="tool-button" id="clearButton" title="Clear the editor (Ctrl+Z to undo)">Clear</button>
+                <button class="tool-button" id="resetButton" title="Restore the starter code (Ctrl+Z to undo)">Reset</button>
+            </div>
+        </div>
+
+        <div class="editor-container">
+            <div class="editor">
+                <div class="line-numbers" id="lineNumbers"></div>
+                <div class="code-area">
+                    <pre id="highlightLayer" aria-hidden="true"><code id="highlightCode" class="language-python"></code></pre>
+                    <textarea
+                        id="codeEditor"
+                        spellcheck="false"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        aria-label="Python code editor"
+                        placeholder="# Write your Python code here..."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="editor-status">
+            <div class="status-group">
+                <span id="cursorPosition">Ln 1, Col 1</span>
+                <span class="hide-sm">Spaces: 4</span>
+            </div>
+            <div class="status-group">
+                <span id="charCount">0 characters</span>
+                <span class="hide-sm">Python 3</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="splitter" id="splitter"
+         role="separator" tabindex="0"
+         aria-label="Resize output panel"
+         aria-orientation="vertical"
+         title="Drag to resize · Double-click to reset"></div>
+
+    <section class="right-section" id="rightSection">
+        <div class="input-section" id="inputSection">
+            <div class="input-header">
+                <span class="input-title">Program Input</span>
+                <div class="input-header-right">
+                    <button class="small-button visible" id="addInputButton" title="Add another input value (for input() inside loops)">+ Add</button>
+                    <span class="input-status" id="inputStatus">Waiting for input</span>
+                </div>
+            </div>
+            <div class="input-body" id="inputBody"></div>
+        </div>
+
+        <div class="output-section">
+            <div class="output-header">
+                <span class="output-title">Output</span>
+                <div class="output-actions">
+                    <button class="small-button" id="copyButton">Copy</button>
+                    <button class="small-button" id="clearOutputButton">Clear</button>
+                    <span class="output-status">
+                        <span class="status-dot ready" id="statusDot"></span>
+                        <span id="statusText">Ready</span>
+                    </span>
+                    <button class="small-button collapse-button visible" id="collapseButton"
+                            aria-label="Collapse output" title="Collapse / expand output">▾</button>
+                </div>
+            </div>
+            <div class="output-console" id="outputConsole" role="log" aria-live="polite">
+                <div class="output-placeholder">
+                    Click Run to execute your Python program.
+                </div>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+<script>
+/* ELEMENTS */
+const root            = document.documentElement;
+const workspace       = document.getElementById("workspace");
+const rightSection    = document.getElementById("rightSection");
+const splitter        = document.getElementById("splitter");
+const codeEditor      = document.getElementById("codeEditor");
+const highlightLayer  = document.getElementById("highlightLayer");
+const highlightCode   = document.getElementById("highlightCode");
+const lineNumbers     = document.getElementById("lineNumbers");
+const runButton       = document.getElementById("runButton");
+const stopButton      = document.getElementById("stopButton");
+const clearButton     = document.getElementById("clearButton");
+const resetButton     = document.getElementById("resetButton");
+const fontDown        = document.getElementById("fontDown");
+const fontUp          = document.getElementById("fontUp");
+const copyCodeButton  = document.getElementById("copyCodeButton");
+const downloadButton  = document.getElementById("downloadButton");
+const inputSection    = document.getElementById("inputSection");
+const inputBody       = document.getElementById("inputBody");
+const inputStatus     = document.getElementById("inputStatus");
+const addInputButton  = document.getElementById("addInputButton");
+const outputConsole   = document.getElementById("outputConsole");
+const statusDot       = document.getElementById("statusDot");
+const statusText      = document.getElementById("statusText");
+const cursorPosition  = document.getElementById("cursorPosition");
+const charCount       = document.getElementById("charCount");
+const copyButton      = document.getElementById("copyButton");
+const clearOutputBtn  = document.getElementById("clearOutputButton");
+const collapseButton  = document.getElementById("collapseButton");
+
+const DEFAULT_CODE =
+`name = input("Enter your name: ")
+print("Hello", name)`;
+
+const STORAGE_KEY = "python_editor_code_v1";
+const LAYOUT_KEY  = "python_editor_layout_v1";
+const FONT_KEY    = "python_editor_font_v1";
+const EMPTY_OUTPUT_HTML =
+    `<div class="output-placeholder">Click Run to execute your Python program.</div>`;
+
+const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+
+/* STATE */
+let inputMode = false;
+let running   = false;
+let abortCtrl = null;
+let errorLine = null;
+
+/* =========================================================
+   RESIZABLE LAYOUT
+========================================================= */
+const mobileQuery = window.matchMedia("(max-width: 850px)");
+const DEFAULT_LAYOUT = { desk: 0.38, mob: 0.40, collapsed: false };
+let layout = Object.assign({}, DEFAULT_LAYOUT);
+
+try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY));
+    if (saved && typeof saved === "object") Object.assign(layout, saved);
+} catch (e) {}
+
+function saveLayout() {
+    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (e) {}
+}
+function isMobile() { return mobileQuery.matches; }
+
+function limits(total) {
+    const mobile   = isMobile();
+    const minRight = mobile ? 120 : 260;
+    const minLeft  = mobile ? 140 : 320;
+    const sp = splitter.getBoundingClientRect()[mobile ? "height" : "width"] || 10;
+    let maxRight = total - minLeft - sp;
+    if (maxRight < minRight) maxRight = minRight;
+    return { minRight, maxRight };
+}
+
+function applyLayout() {
+    const rect   = workspace.getBoundingClientRect();
+    const mobile = isMobile();
+    const total  = mobile ? rect.height : rect.width;
+    const header = parseFloat(getComputedStyle(root).getPropertyValue("--panel-header")) || 43;
+
+    splitter.setAttribute("aria-orientation", mobile ? "horizontal" : "vertical");
+
+    if (mobile && layout.collapsed) {
+        rightSection.classList.add("collapsed");
+        rightSection.style.flex = `0 0 ${header}px`;
+        collapseButton.textContent = "▴";
+        collapseButton.setAttribute("aria-label", "Expand output");
+        return;
+    }
+
+    rightSection.classList.remove("collapsed");
+    collapseButton.textContent = "▾";
+    collapseButton.setAttribute("aria-label", "Collapse output");
+
+    const { minRight, maxRight } = limits(total);
+    const frac = mobile ? layout.mob : layout.desk;
+    const px = Math.min(Math.max(frac * total, minRight), maxRight);
+
+    rightSection.style.flex = `0 0 ${px}px`;
+    splitter.setAttribute("aria-valuenow", Math.round((px / total) * 100));
+}
+
+function setRightSize(px) {
+    const rect   = workspace.getBoundingClientRect();
+    const mobile = isMobile();
+    const total  = mobile ? rect.height : rect.width;
+    const { minRight, maxRight } = limits(total);
+    px = Math.min(Math.max(px, minRight), maxRight);
+    layout[mobile ? "mob" : "desk"] = px / total;
+    if (mobile) layout.collapsed = false;
+    applyLayout();
+}
+
+function setCollapsed(value) {
+    layout.collapsed = value;
+    applyLayout();
+    saveLayout();
+}
+
+let dragging = false;
+
+splitter.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    splitter.setPointerCapture(e.pointerId);
+    splitter.classList.add("active");
+    document.body.classList.add("dragging", isMobile() ? "row" : "col");
+    e.preventDefault();
+});
+
+splitter.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const rect = workspace.getBoundingClientRect();
+    const sp   = splitter.getBoundingClientRect();
+    if (isMobile()) setRightSize(rect.bottom - e.clientY - sp.height / 2);
+    else            setRightSize(rect.right  - e.clientX - sp.width  / 2);
+});
+
+function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { splitter.releasePointerCapture(e.pointerId); } catch (err) {}
+    splitter.classList.remove("active");
+    document.body.classList.remove("dragging", "row", "col");
+    saveLayout();
+}
+splitter.addEventListener("pointerup", endDrag);
+splitter.addEventListener("pointercancel", endDrag);
+
+splitter.addEventListener("dblclick", () => {
+    layout = Object.assign({}, DEFAULT_LAYOUT);
+    applyLayout();
+    saveLayout();
+});
+
+splitter.addEventListener("keydown", (e) => {
+    const rect   = workspace.getBoundingClientRect();
+    const mobile = isMobile();
+    const total  = mobile ? rect.height : rect.width;
+    const current = rightSection.getBoundingClientRect()[mobile ? "height" : "width"];
+    const step = total * 0.03;
+    let handled = true;
+
+    if (mobile) {
+        if (e.key === "ArrowUp")        setRightSize(current + step);
+        else if (e.key === "ArrowDown") setRightSize(current - step);
+        else handled = false;
+    } else {
+        if (e.key === "ArrowLeft")       setRightSize(current + step);
+        else if (e.key === "ArrowRight") setRightSize(current - step);
+        else handled = false;
+    }
+    if (e.key === "Home" || e.key === "Enter") {
+        layout = Object.assign({}, DEFAULT_LAYOUT);
+        applyLayout();
+        handled = true;
+    }
+    if (handled) { e.preventDefault(); saveLayout(); }
+});
+
+collapseButton.addEventListener("click", () => setCollapsed(!layout.collapsed));
+window.addEventListener("resize", applyLayout);
+window.addEventListener("orientationchange", () => setTimeout(applyLayout, 150));
+if (mobileQuery.addEventListener) mobileQuery.addEventListener("change", applyLayout);
+
+/* =========================================================
+   FONT SIZE
+========================================================= */
+const FONT_MIN = isCoarse ? 16 : 11;
+const FONT_MAX = 26;
+let fontSize = isCoarse ? 16 : 14;
+try {
+    const f = parseInt(localStorage.getItem(FONT_KEY), 10);
+    if (f) fontSize = f;
+} catch (e) {}
+
+function applyFont() {
+    fontSize = Math.min(Math.max(fontSize, FONT_MIN), FONT_MAX);
+    root.style.setProperty("--code-font", fontSize + "px");
+    root.style.setProperty("--code-lh", Math.round(fontSize * 1.6) + "px");
+    try { localStorage.setItem(FONT_KEY, String(fontSize)); } catch (e) {}
+    syncScroll();
+}
+fontDown.addEventListener("click", () => { fontSize -= 1; applyFont(); });
+fontUp.addEventListener("click",   () => { fontSize += 1; applyFont(); });
+
+/* =========================================================
+   SYNTAX HIGHLIGHTING + GUTTER
+========================================================= */
+function syncScroll() {
+    highlightLayer.scrollTop  = codeEditor.scrollTop;
+    highlightLayer.scrollLeft = codeEditor.scrollLeft;
+    lineNumbers.scrollTop     = codeEditor.scrollTop;
+}
+
+function updateHighlight() {
+    let text = codeEditor.value;
+    if (text.endsWith("\n")) text += " ";
+    highlightCode.textContent = text;
+    if (window.Prism) Prism.highlightElement(highlightCode);
+    syncScroll();
+}
+
+function getCurrentLineNumber() {
+    return codeEditor.value.substring(0, codeEditor.selectionStart).split("\n").length;
+}
+
+let gutterKey = "";
+function renderGutter() {
+    const total = codeEditor.value.split("\n").length;
+    const cur   = getCurrentLineNumber();
+    const key   = total + "|" + cur + "|" + errorLine;
+    if (key === gutterKey) return;
+    gutterKey = key;
+
+    let html = "";
+    for (let i = 1; i <= total; i++) {
+        let cls = "line-number";
+        if (i === errorLine) cls += " error";
+        else if (i === cur)  cls += " current";
+        html += `<div class="${cls}">${i}</div>`;
+    }
+    lineNumbers.innerHTML = html;
+    lineNumbers.scrollTop = codeEditor.scrollTop;
+}
+
+function updateCursor() {
+    const before = codeEditor.value.substring(0, codeEditor.selectionStart);
+    const lines  = before.split("\n");
+    cursorPosition.textContent = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
+    const count = codeEditor.value.length;
+    charCount.textContent = `${count} character${count === 1 ? "" : "s"}`;
+}
+
+function refreshCursor() { renderGutter(); updateCursor(); }
+
+function updateLineNumbers() {
+    updateHighlight();
+    renderGutter();
+    updateCursor();
+}
+
+function goToLine(n) {
+    const lines = codeEditor.value.split("\n");
+    if (n < 1 || n > lines.length) return;
+    let start = 0;
+    for (let i = 0; i < n - 1; i++) start += lines[i].length + 1;
+    const end = start + lines[n - 1].length;
+    codeEditor.focus();
+    codeEditor.setSelectionRange(start, end);
+    const lh = parseFloat(getComputedStyle(codeEditor).lineHeight) || 22;
+    codeEditor.scrollTop = Math.max(0, (n - 1) * lh - codeEditor.clientHeight / 3);
+    syncScroll();
+    refreshCursor();
+}
+
+/* =========================================================
+   EDIT HELPER (keeps Ctrl+Z / Ctrl+Y working)
+========================================================= */
+function edit(start, end, text, selStart, selEnd) {
+    codeEditor.focus();
+    codeEditor.setSelectionRange(start, end);
+    let ok = false;
+    try {
+        if (text === "") {
+            if (start === end) return;
+            ok = document.execCommand("delete");
+        } else {
+            ok = document.execCommand("insertText", false, text);
+        }
+    } catch (e) {}
+    if (!ok) {
+        codeEditor.setRangeText(text, start, end, "end");
+        codeEditor.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    if (selStart === undefined) selStart = start + text.length;
+    if (selEnd === undefined)   selEnd = selStart;
+    codeEditor.setSelectionRange(selStart, selEnd);
+    refreshCursor();
+}
+
+/* Replace the whole document (undo-able on desktop; no keyboard pop-up on touch) */
+function replaceAll(text) {
+    if (isCoarse) {
+        codeEditor.value = text;
+        codeEditor.dispatchEvent(new Event("input", { bubbles: true }));
+        codeEditor.scrollTop = 0;
+    } else {
+        if (codeEditor.value === "" && text === "") return;
+        if (codeEditor.value === "") {
+            edit(0, 0, text);
+        } else if (text === "") {
+            edit(0, codeEditor.value.length, "");
+        } else {
+            edit(0, codeEditor.value.length, text);
+        }
+        codeEditor.setSelectionRange(0, 0);
+        codeEditor.scrollTop = 0;
+    }
+    syncScroll();
+    refreshCursor();
+}
+
+/* =========================================================
+   INPUT() DETECTION
+========================================================= */
+function extractInputPrompts() {
+    const code = codeEditor.value;
+    const prompts = [];
+    const re = /\binput\s*\(/g;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+        const lineStart = code.lastIndexOf("\n", m.index - 1) + 1;
+        if (code.slice(lineStart, m.index).includes("#")) continue;   // commented out
+
+        const lit = /\s*(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)')\s*\)/y;
+        lit.lastIndex = re.lastIndex;
+        const mm = lit.exec(code);
+        let p = "";
+        if (mm) p = mm[1] !== undefined ? mm[1] : mm[2];
+        p = p.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+        prompts.push(p);
+    }
+    return prompts;
+}
+
+function hasInputFunction() { return extractInputPrompts().length > 0; }
+
+let lastPromptSig   = "";
+let lastPromptCount = 0;
+
+function createInputRow(prompt, index, value) {
+    const row = document.createElement("div");
+    row.className = "input-row";
+
+    const label = document.createElement("span");
+    label.className = "input-prompt";
+    label.textContent = prompt || `Input ${index + 1}:`;
+    label.title = label.textContent;
+
+    const field = document.createElement("input");
+    field.className = "input-field";
+    field.type = "text";
+    field.placeholder = "Enter value";
+    field.setAttribute("aria-label", label.textContent);
+    if (value) field.value = value;
+
+    field.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); runCode(); }
+    });
+
+    row.appendChild(label);
+    row.appendChild(field);
+    return row;
+}
+
+function buildInputRows(prompts, oldValues, extras) {
+    inputBody.innerHTML = "";
+    prompts.forEach((p, i) => inputBody.appendChild(createInputRow(p, i, oldValues[i])));
+    for (let j = 0; j < extras; j++) {
+        const idx = prompts.length + j;
+        inputBody.appendChild(createInputRow("", idx, oldValues[idx]));
+    }
+}
+
+function showInputSection(manual) {
+    const prompts = extractInputPrompts();
+    if (manual && prompts.length === 0) prompts.push("");
+
+    if (prompts.length === 0) {
+        inputSection.classList.remove("visible");
+        inputMode = false;
+        return;
+    }
+
+    buildInputRows(prompts, [], 0);
+    lastPromptSig   = JSON.stringify(prompts);
+    lastPromptCount = prompts.length;
+    inputSection.classList.add("visible");
+    inputMode = true;
+    inputStatus.textContent = "Waiting for input";
+
+    const first = inputBody.querySelector(".input-field");
+    if (first) setTimeout(() => first.focus(), 50);
+}
+
+/* Keep typed values while the code is edited */
+function syncInputRows() {
+    const prompts = extractInputPrompts();
+    if (prompts.length === 0) {
+        inputSection.classList.remove("visible");
+        inputBody.innerHTML = "";
+        inputMode = false;
+        lastPromptSig = "";
+        return;
+    }
+    const sig = JSON.stringify(prompts);
+    if (sig === lastPromptSig) return;
+
+    const old = Array.from(inputBody.querySelectorAll(".input-field")).map(f => f.value);
+    const extras = Math.max(0, old.length - lastPromptCount);
+    buildInputRows(prompts, old, extras);
+    lastPromptSig   = sig;
+    lastPromptCount = prompts.length;
+}
+
+addInputButton.addEventListener("click", () => {
+    const n = inputBody.querySelectorAll(".input-field").length;
+    const row = createInputRow("", n, "");
+    inputBody.appendChild(row);
+    inputBody.scrollTop = inputBody.scrollHeight;
+    row.querySelector(".input-field").focus();
+});
+
+function getUserInput() {
+    return Array.from(inputBody.querySelectorAll(".input-field"))
+        .map(f => f.value)
+        .join("\n");
+}
+
+/* Python's input("prompt") echoes the prompt to stdout; remove it from the output */
+function stripInputPrompts(text) {
+    if (!text) return "";
+    if (!inputMode) return text;
+
+    let result = text;
+    extractInputPrompts().forEach((prompt) => {
+        if (prompt && prompt.length > 0) {
+            const escaped = prompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            result = result.replace(new RegExp(escaped, "g"), "");
+        }
+    });
+    return result;
+}
+
+/* =========================================================
+   STATUS / OUTPUT
+========================================================= */
+function setStatus(type, message) {
+    statusDot.className = "status-dot";
+    if (type === "ready")        statusDot.classList.add("ready");
+    else if (type === "running") statusDot.classList.add("running");
+    else if (type === "error")   statusDot.classList.add("error");
+    statusText.textContent = message;
+}
+
+function resetOutput() {
+    outputConsole.innerHTML = EMPTY_OUTPUT_HTML;
+    copyButton.classList.remove("visible");
+    clearOutputBtn.classList.remove("visible");
+    setStatus("ready", "Ready");
+}
+
+function showOutputButtons() {
+    copyButton.classList.add("visible");
+    clearOutputBtn.classList.add("visible");
+}
+
+/* Turn  File "main.py", line N  in a traceback into clickable links */
+function renderErrorText(text) {
+    const frag = document.createDocumentFragment();
+    const re = /(File "main\.py", )(line (\d+))/g;
+    let last = 0, m, lastLine = null;
+    while ((m = re.exec(text)) !== null) {
+        frag.appendChild(document.createTextNode(text.slice(last, m.index + m[1].length)));
+        const a = document.createElement("a");
+        a.href = "#";
+        a.className = "error-link";
+        a.textContent = m[2];
+        a.dataset.line = m[3];
+        a.title = "Go to this line";
+        frag.appendChild(a);
+        last = m.index + m[0].length;
+        lastLine = parseInt(m[3], 10);
+    }
+    frag.appendChild(document.createTextNode(text.slice(last)));
+    return { frag, lastLine };
+}
+
+outputConsole.addEventListener("click", (e) => {
+    const link = e.target.closest(".error-link");
+    if (!link) return;
+    e.preventDefault();
+    goToLine(parseInt(link.dataset.line, 10));
+});
+
+function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(ta);
+        ok ? resolve() : reject();
+    });
+}
+
+function flashLabel(btn, text) {
+    const original = btn.textContent;
+    btn.textContent = text;
+    setTimeout(() => btn.textContent = original, 1200);
+}
+
+/* =========================================================
+   RUN / STOP
+========================================================= */
+async function runCode() {
+    if (running) return;
+
+    const code = codeEditor.value;
+    if (layout.collapsed) setCollapsed(false);
+
+    if (!code.trim()) {
+        outputConsole.innerHTML =
+            `<div class="output-error">Please enter some Python code.</div>`;
+        setStatus("error", "Error");
+        return;
+    }
+
+    if (hasInputFunction() && !inputMode) {
+        outputConsole.innerHTML =
+            `<div class="output-placeholder">Enter the required values above, then click Run again.</div>`;
+        showInputSection();
+        setStatus("running", "Waiting for input");
+        return;
+    }
+
+    running = true;
+    errorLine = null;
+    renderGutter();
+    runButton.disabled = true;
+    runButton.classList.add("hidden");
+    stopButton.classList.add("visible");
+    setStatus("running", "Running...");
+
+    outputConsole.innerHTML =
+        `<div class="output-placeholder">Running your Python program...</div>`;
+    copyButton.classList.remove("visible");
+    clearOutputBtn.classList.remove("visible");
+
+    const userInput = inputMode ? getUserInput() : "";
+    const t0 = performance.now();
+    abortCtrl = new AbortController();
+
+    try {
+        const resp = await fetch("/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, input: userInput }),
+            signal: abortCtrl.signal,
+        });
+        const data = await resp.json();
+        const secs = ((performance.now() - t0) / 1000).toFixed(2);
+
+        outputConsole.innerHTML = "";
+
+        if (data.success) {
+            const out = stripInputPrompts(data.output || "");
+
+            if (out.trim().length === 0) {
+                outputConsole.innerHTML =
+                    `<div class="output-placeholder">Program finished successfully with no output.</div>`;
+            } else {
+                outputConsole.textContent = out;
+                showOutputButtons();
+            }
+            setStatus("ready", `Finished · ${secs}s`);
+            if (inputMode) inputStatus.textContent = "Completed";
+        } else {
+            const cleanOutput = stripInputPrompts(data.output);
+
+            if (cleanOutput) {
+                const block = document.createElement("div");
+                block.textContent = cleanOutput;
+                outputConsole.appendChild(block);
+            }
+
+            let errText = data.error || "Program error.";
+            if (/EOFError/.test(errText)) {
+                errText += "\n\nHint: the program asked for more input() values than were provided. " +
+                           "Enter the values in Program Input (use + Add for extra ones) and run again.";
+                if (!inputMode) showInputSection(true);
+            }
+
+            const err = document.createElement("div");
+            err.className = "output-error";
+            err.style.marginTop = cleanOutput ? "10px" : "0";
+            const { frag, lastLine } = renderErrorText(errText);
+            err.appendChild(frag);
+            outputConsole.appendChild(err);
+
+            if (lastLine) { errorLine = lastLine; renderGutter(); }
+
+            setStatus("error", "Error");
+            showOutputButtons();
+        }
+    } catch (err) {
+        if (err.name === "AbortError") {
+            outputConsole.innerHTML =
+                `<div class="output-placeholder">Execution cancelled.</div>`;
+            setStatus("ready", "Cancelled");
+        } else {
+            outputConsole.innerHTML =
+                `<div class="output-error">Unable to connect to the Python server.</div>`;
+            setStatus("error", "Connection Error");
+        }
+    } finally {
+        running = false;
+        abortCtrl = null;
+        runButton.disabled = false;
+        runButton.classList.remove("hidden");
+        stopButton.classList.remove("visible");
+    }
+}
+
+function stopRun() { if (abortCtrl) abortCtrl.abort(); }
+
+/* =========================================================
+   CLEAR / RESET / COPY / DOWNLOAD
+========================================================= */
+function hideInputs() {
+    inputMode = false;
+    lastPromptSig = "";
+    inputSection.classList.remove("visible");
+    inputBody.innerHTML = "";
+    inputStatus.textContent = "Waiting for input";
+}
+
+function clearCode() {
+    hideInputs();
+    resetOutput();
+    replaceAll("");
+    codeEditor.focus();
+}
+
+function resetCode() {
+    hideInputs();
+    resetOutput();
+    replaceAll(DEFAULT_CODE);
+    if (!isCoarse) codeEditor.focus();
+}
+
+copyCodeButton.addEventListener("click", () => {
+    copyText(codeEditor.value)
+        .then(() => flashLabel(copyCodeButton, "Copied!"))
+        .catch(() => flashLabel(copyCodeButton, "Failed"));
+});
+
+downloadButton.addEventListener("click", () => {
+    const blob = new Blob([codeEditor.value], { type: "text/x-python" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "main.py";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+/* PERSISTENCE */
+function saveCode() {
+    try { localStorage.setItem(STORAGE_KEY, codeEditor.value); } catch (e) {}
+}
+function loadCode() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        codeEditor.value = (saved !== null && saved !== "") ? saved : DEFAULT_CODE;
+    } catch (e) {
+        codeEditor.value = DEFAULT_CODE;
+    }
+}
+
+/* =========================================================
+   INDENTATION HELPERS
+========================================================= */
+function getCurrentLineInfo() {
+    const value  = codeEditor.value;
+    const cursor = codeEditor.selectionStart;
+    const lineStart  = value.lastIndexOf("\n", cursor - 1) + 1;
+    const lineEndIdx = value.indexOf("\n", cursor);
+    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
+    return { value, cursor, lineStart, lineEnd, line: value.substring(lineStart, lineEnd) };
+}
+
+function getIndentation(line) {
+    const m = line.match(/^[ \t]*/);
+    return m ? m[0] : "";
+}
+
+function isBlockStart(line) {
+    const t = line.trim();
+    if (!t) return false;
+    return /^(if|elif|else|for|while|def|class|try|except|finally|with|async\s+def|async\s+for|async\s+with)\b.*:\s*(#.*)?$/.test(t);
+}
+
+function findMatchingParentIndent(keyword, currentLineIndex) {
+    const lines = codeEditor.value.split("\n");
+    for (let i = currentLineIndex - 1; i >= 0; i--) {
+        const t = lines[i].trim();
+        if (!t) continue;
+        const indent = getIndentation(lines[i]);
+
+        if (keyword === "else" || keyword === "elif") {
+            if (/^(if|elif|for|while|try|with)\b.*:\s*(#.*)?$/.test(t)) return indent;
+        }
+        if (keyword === "except" || keyword === "finally") {
+            if (/^try\b.*:\s*(#.*)?$/.test(t)) return indent;
+        }
+    }
+    return null;
+}
+
+/* =========================================================
+   KEY HANDLERS
+========================================================= */
+
+/* Tab / Shift+Tab */
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+
+    const value = codeEditor.value;
+    const s  = codeEditor.selectionStart;
+    const en = codeEditor.selectionEnd;
+
+    if (s === en && !e.shiftKey) { edit(s, en, "    "); return; }
+
+    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+    let blockEnd = en;
+    if (s === en) {
+        const i = value.indexOf("\n", s);
+        blockEnd = i === -1 ? value.length : i;
+    }
+
+    const block   = value.substring(lineStart, blockEnd);
+    const updated = e.shiftKey
+        ? block.replace(/^ {1,4}/gm, "")
+        : block.replace(/^(?=[^\n])/gm, "    ");
+    if (updated === block) return;
+
+    if (s === en) {
+        const cursor = Math.max(lineStart, s - (block.length - updated.length));
+        edit(lineStart, blockEnd, updated, cursor, cursor);
+    } else {
+        edit(lineStart, blockEnd, updated, lineStart, lineStart + updated.length);
+    }
+});
+
+/* Enter (smart indent) */
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+
+    const info = getCurrentLineInfo();
+    const s  = codeEditor.selectionStart;
+    const en = codeEditor.selectionEnd;
+    const beforeCursor = info.line.substring(0, s - info.lineStart);
+    const indent = getIndentation(beforeCursor);
+    const newIndent = isBlockStart(beforeCursor) ? indent + "    " : indent;
+
+    edit(s, en, "\n" + newIndent);
+});
+
+/* Backspace: remove indentation by 4, or delete an empty auto-closed pair */
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (codeEditor.selectionStart !== codeEditor.selectionEnd) return;
+
+    const cursor = codeEditor.selectionStart;
+    if (cursor <= 0) return;
+    const value = codeEditor.value;
+    const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+    const beforeCursor = value.substring(lineStart, cursor);
+
+    if (/^ +$/.test(beforeCursor)) {
+        e.preventDefault();
+        const remove = beforeCursor.length % 4 === 0 ? 4 : beforeCursor.length % 4;
+        edit(cursor - remove, cursor, "");
+        return;
+    }
+
+    const left = value[cursor - 1], right = value[cursor];
+    if (PAIRS[left] && PAIRS[left] === right) {
+        e.preventDefault();
+        edit(cursor - 1, cursor + 1, "");
+    }
+});
+
+/* Auto-close brackets and quotes, with skip-over */
+const PAIRS   = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'" };
+const CLOSERS = new Set([")", "]", "}", '"', "'"]);
+
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+
+    const s = codeEditor.selectionStart;
+    const en = codeEditor.selectionEnd;
+    const value = codeEditor.value;
+    const next = value[s] || "";
+    const prev = value[s - 1] || "";
+
+    // Typing a closing character that is already there: just move past it
+    if (s === en && CLOSERS.has(e.key) && next === e.key) {
+        e.preventDefault();
+        codeEditor.setSelectionRange(s + 1, s + 1);
+        refreshCursor();
+        return;
+    }
+
+    if (!PAIRS[e.key]) return;
+    const close = PAIRS[e.key];
+    const isQuote = e.key === '"' || e.key === "'";
+
+    // Wrap a selection
+    if (s !== en) {
+        e.preventDefault();
+        edit(s, en, e.key + value.substring(s, en) + close, s + 1, en + 1);
+        return;
+    }
+
+    // Don't pair apostrophes inside words (don't, it's) or before text
+    if (isQuote && (/\w/.test(prev) || /\w/.test(next))) return;
+    if (!isQuote && next && !/[\s)\]};,:]/.test(next)) return;
+
+    e.preventDefault();
+    edit(s, s, e.key + close, s + 1, s + 1);
+});
+
+/* else / elif / except / finally auto-align */
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key !== ":") return;
+
+    const info = getCurrentLineInfo();
+    const beforeCursor = info.line.substring(0, info.cursor - info.lineStart);
+    const m = beforeCursor.match(/^([ \t]*)(else|elif|except|finally)\b(.*)$/);
+    if (!m) return;
+
+    const lineIndex = value_lineIndex(info.lineStart);
+    const parentIndent = findMatchingParentIndent(m[2], lineIndex);
+    if (parentIndent === null) return;
+
+    e.preventDefault();
+    edit(info.lineStart, codeEditor.selectionEnd,
+         parentIndent + beforeCursor.substring(m[1].length) + ":");
+});
+function value_lineIndex(lineStart) {
+    return codeEditor.value.substring(0, lineStart).split("\n").length - 1;
+}
+
+/* Ctrl+/ : toggle comments */
+codeEditor.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || (e.key !== "/" && e.key !== "Divide")) return;
+    e.preventDefault();
+
+    const s = codeEditor.selectionStart;
+    const en = codeEditor.selectionEnd;
+    const value = codeEditor.value;
+    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+    const block = value.substring(lineStart, en);
+    const allCommented = block.split("\n").every(l => /^\s*#/.test(l) || l.trim() === "");
+    const updated = allCommented
+        ? block.replace(/^(\s*)# ?/gm, "$1")
+        : block.replace(/^(\s*)/gm, "$1# ");
+
+    if (s === en) {
+        const cursor = Math.max(lineStart, s + (updated.length - block.length));
+        edit(lineStart, en, updated, cursor, cursor);
+    } else {
+        edit(lineStart, en, updated, lineStart, lineStart + updated.length);
+    }
+});
+
+/* Ctrl+D : duplicate line */
+codeEditor.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || (e.key !== "d" && e.key !== "D")) return;
+    e.preventDefault();
+    const info = getCurrentLineInfo();
+    edit(info.lineEnd, info.lineEnd, "\n" + info.value.substring(info.lineStart, info.lineEnd));
+});
+
+/* Smart Home */
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key !== "Home" || e.shiftKey) return;
+    const info = getCurrentLineInfo();
+    const target = info.lineStart + info.line.match(/^[ \t]*/)[0].length;
+    const cursor = codeEditor.selectionStart;
+    if (cursor !== target && cursor !== info.lineStart) {
+        e.preventDefault();
+        codeEditor.setSelectionRange(target, target);
+        refreshCursor();
+    }
+});
+
+/* Ctrl+Enter : run */
+codeEditor.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runCode();
+    }
+});
+
+/* Ctrl+S : save */
+window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        saveCode();
+    }
+});
+
+/* Paste: normalise line endings, turn tabs into 4 spaces, re-indent on blank indented lines */
+codeEditor.addEventListener("paste", (e) => {
+    let text = (e.clipboardData || window.clipboardData).getData("text");
+    if (!text) return;
+    e.preventDefault();
+
+    text = text.replace(/\r\n?/g, "\n").replace(/\t/g, "    ");
+
+    const s = codeEditor.selectionStart;
+    const en = codeEditor.selectionEnd;
+    const value = codeEditor.value;
+    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+    const beforeOnLine = value.substring(lineStart, s);
+
+    let inserted = text;
+    const lines = text.split("\n");
+    if (lines.length > 1 && beforeOnLine.length > 0 && beforeOnLine.trim() === "") {
+        inserted = lines.map((l, i) => i === 0 ? l : beforeOnLine + l).join("\n");
+    }
+    edit(s, en, inserted);
+});
+
+/* INPUT / SCROLL / CURSOR EVENTS */
+codeEditor.addEventListener("input", () => {
+    errorLine = null;
+    if (inputMode) syncInputRows();
+    saveCode();
+    updateHighlight();
+    renderGutter();
+    updateCursor();
+});
+
+codeEditor.addEventListener("click",  refreshCursor);
+codeEditor.addEventListener("keyup",  refreshCursor);
+codeEditor.addEventListener("select", refreshCursor);
+codeEditor.addEventListener("scroll", syncScroll);
+
+/* OUTPUT BUTTONS */
+copyButton.addEventListener("click", () => {
+    copyText(outputConsole.innerText)
+        .then(() => flashLabel(copyButton, "Copied!"))
+        .catch(() => flashLabel(copyButton, "Failed"));
+});
+clearOutputBtn.addEventListener("click", resetOutput);
+
+/* BUTTONS */
+runButton.addEventListener("click", runCode);
+stopButton.addEventListener("click", stopRun);
+clearButton.addEventListener("click", clearCode);
+resetButton.addEventListener("click", resetCode);
+
+/* INIT */
+loadCode();
+applyFont();
+updateLineNumbers();
+applyLayout();
+window.addEventListener("beforeunload", saveCode);
+</script>
+
+</body>
+</html>
