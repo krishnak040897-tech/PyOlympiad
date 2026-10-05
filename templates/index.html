@@ -68,6 +68,21 @@ body.dragging.row { cursor: row-resize; }
 .brand-name { font-size: 16px; font-weight: 650; color: #202124; white-space: nowrap; }
 .brand-subtitle { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.header-back-button {
+    display: none;
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: #374151;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+.header-back-button svg { width: 22px; height: 22px; }
+.header-back-button:hover { background: #f0f0f0; }
+
 .language {
     height: 34px; padding: 0 12px;
     border: 1px solid var(--border); border-radius: 7px; background: white;
@@ -75,6 +90,9 @@ body.dragging.row { cursor: row-resize; }
     font-size: 12px; color: #4b5563; white-space: nowrap;
 }
 .python-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+
+.run-controls { display: flex; align-items: center; }
+.run-icon { line-height: 1; }
 
 .run-button, .stop-button {
     height: 36px; border: none; border-radius: 7px; color: white;
@@ -144,7 +162,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .line-numbers {
     width: 54px; flex-shrink: 0; padding-top: 14px;
     background: #fafafa; border-right: 1px solid #eeeeee;
-    color: #9ca3af; text-align: right; padding-right: 13px;
+    color: #9ca3af; text-align: right; padding-right: 13px; padding-bottom: 14px;
     user-select: none; overflow: hidden;
 }
 .line-number { height: var(--code-lh); font-size: calc(var(--code-font) - 1px); }
@@ -239,7 +257,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .splitter:hover, .splitter.active { background: rgba(16, 163, 127, 0.18); }
 .splitter:hover::after, .splitter.active::after { background: var(--green); }
 
-/* ================= RIGHT SECTION ================= */
+/* ================= RIGHT SECTION (SHELL) ================= */
 .right-section {
     flex: 0 0 38%;
     min-width: 0; min-height: 0;
@@ -271,6 +289,12 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     font-family: Consolas, "Courier New", monospace;
     font-size: 12px; color: #374151; max-width: 55%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.input-history-value {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; color: #0a7d5a; /* matches string color */
+    flex: 1; min-width: 80px; height: 32px;
+    display: flex; align-items: center; padding: 0 9px;
 }
 .input-field {
     flex: 1; min-width: 80px; height: 32px;
@@ -322,21 +346,22 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .right-section.collapsed .output-console,
 .right-section.collapsed .input-section { display: none; }
 
-/* ================= TABLET / MOBILE: STACKED ================= */
+/* ================= TABLET / MOBILE: DEDICATED SHELL SCREEN ================= */
 @media (max-width: 850px) {
     .workspace { flex-direction: column; }
-    .editor-section { min-height: 140px; }
-    .splitter {
-        cursor: row-resize;
-        border-left: none; border-right: none;
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-    }
-    .splitter::before { inset: -7px 0; }
-    .splitter::after  { width: 36px; height: 3px; }
-    .right-section { flex: 0 0 40%; width: 100%; }
-    .collapse-button { display: inline-block; }
+    .editor-section { width: 100%; flex: 1 1 0; min-height: 0; display: flex; }
+    .splitter { display: none; }
+    .right-section { display: none; width: 100%; flex: 1 1 0; background: var(--console-background); }
+    
+    /* Activate Shell View */
+    body.shell-view .header-back-button { display: flex; }
+    body.shell-view .editor-section { display: none; }
+    body.shell-view .right-section { display: flex; flex-direction: column; }
+    body.shell-view .run-controls { display: none; } 
+    
+    .input-section.visible { max-height: 40%; flex-shrink: 0; }
     .input-body { max-height: 28vh; }
+    .output-section { flex: 1 1 0; min-height: 0; }
 }
 
 /* ================= SMALL PHONES ================= */
@@ -346,14 +371,30 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     .brand-subtitle { font-size: 10px; }
     .brand-name { font-size: 15px; }
     .brand-logo { width: 34px; height: 34px; }
-    .language { display: none; }
-    .run-button, .stop-button { padding: 0 14px; height: 34px; }
+    .language { height: 30px; padding: 0 10px; font-size: 11px; }
     .editor-toolbar { padding: 0 10px; }
     .font-buttons { display: none; }
     .lbl-full { display: none; }
     .lbl-short { display: inline; }
-    .line-numbers { width: 40px; padding-right: 8px; }
-    #highlightLayer, #codeEditor { padding: 14px 10px; }
+    .line-numbers { width: 40px; padding-right: 8px; padding-bottom: 96px; }
+    #highlightLayer, #codeEditor { padding: 14px 10px 96px; }   /* room so the last lines scroll above the round button */
+
+    /* Round floating Run / Stop button (bottom-right of the editor) */
+    .editor-section { position: relative; }
+    .run-controls {
+        position: absolute; right: 16px; bottom: 46px; z-index: 20;
+    }
+    .run-button, .stop-button {
+        width: 58px; height: 58px; padding: 0;
+        border-radius: 50%;
+        box-shadow: 0 6px 16px rgba(16, 163, 127, 0.45), 0 2px 5px rgba(0, 0, 0, 0.18);
+    }
+    .stop-button { box-shadow: 0 6px 16px rgba(239, 68, 68, 0.45), 0 2px 5px rgba(0, 0, 0, 0.18); }
+    .run-button #runButtonText, .stop-button .run-label { display: none; }
+    .run-icon { font-size: 22px; }
+    .run-button .run-icon { padding-left: 3px; }   /* optical centring of the triangle */
+    .run-button:active, .stop-button:active { transform: scale(0.93); }
+    .right-section { padding-bottom: env(safe-area-inset-bottom, 0px); }
     .editor-status .hide-sm { display: none; }
     .output-console { padding: 12px; }
     .output-status #statusText { display: none; }
@@ -373,9 +414,15 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 /* ================= TOUCH DEVICES ================= */
 @media (pointer: coarse) {
     .input-field { font-size: 16px; height: 38px; }
+    .input-history-value { font-size: 16px; height: 38px; }
     .tool-button, .small-button { height: 34px; }
     .collapse-button { width: 34px; }
     :root { --splitter: 14px; }
+}
+
+@media (max-width: 600px) and (max-height: 480px) {
+    .run-controls { bottom: 16px; }
+    .run-button, .stop-button { width: 48px; height: 48px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -392,24 +439,32 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
         </div>
     </div>
     <div class="header-right">
+        <button id="headerBackButton" class="header-back-button" title="Back to editor" aria-label="Back to editor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+        </button>
         <div class="language">
             <span class="python-dot"></span>
             Python 3
         </div>
-        <button class="run-button" id="runButton" title="Run (Ctrl+Enter)">
-            <span>▶</span>
-            <span id="runButtonText">Run</span>
-        </button>
-        <button class="stop-button" id="stopButton">
-            <span>■</span>
-            <span>Stop</span>
-        </button>
+        <div class="run-controls" id="runControls">
+            <button class="run-button" id="runButton" title="Run (Ctrl+Enter)" aria-label="Run code">
+                <span class="run-icon">▶</span>
+                <span id="runButtonText">Run</span>
+            </button>
+            <button class="stop-button" id="stopButton" title="Stop" aria-label="Stop running">
+                <span class="run-icon">■</span>
+                <span class="run-label">Stop</span>
+            </button>
+        </div>
     </div>
 </header>
 
 <main class="workspace" id="workspace">
 
-    <section class="editor-section">
+    <section class="editor-section" id="editorSection">
         <div class="editor-toolbar">
             <div class="file-name">main.py</div>
             <div class="toolbar-buttons">
@@ -467,7 +522,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
             <div class="input-header">
                 <span class="input-title">Program Input</span>
                 <div class="input-header-right">
-                    <button class="small-button visible" id="addInputButton" title="Add another input value (for input() inside loops)">+ Add</button>
                     <span class="input-status" id="inputStatus">Waiting for input</span>
                 </div>
             </div>
@@ -476,7 +530,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 
         <div class="output-section">
             <div class="output-header">
-                <span class="output-title">Output</span>
+                <span class="output-title">Shell Output</span>
                 <div class="output-actions">
                     <button class="small-button" id="copyButton">Copy</button>
                     <button class="small-button" id="clearOutputButton">Clear</button>
@@ -522,7 +576,6 @@ const downloadButton  = document.getElementById("downloadButton");
 const inputSection    = document.getElementById("inputSection");
 const inputBody       = document.getElementById("inputBody");
 const inputStatus     = document.getElementById("inputStatus");
-const addInputButton  = document.getElementById("addInputButton");
 const outputConsole   = document.getElementById("outputConsole");
 const statusDot       = document.getElementById("statusDot");
 const statusText      = document.getElementById("statusText");
@@ -531,6 +584,7 @@ const charCount       = document.getElementById("charCount");
 const copyButton      = document.getElementById("copyButton");
 const clearOutputBtn  = document.getElementById("clearOutputButton");
 const collapseButton  = document.getElementById("collapseButton");
+const headerBackBtn   = document.getElementById("headerBackButton");
 
 const DEFAULT_CODE =
 `name = input("Enter your name: ")
@@ -550,8 +604,14 @@ let running   = false;
 let abortCtrl = null;
 let errorLine = null;
 
+/* Sequential Input State */
+let promptsList = [];
+let collectedInputs = [];
+let currentPromptIndex = 0;
+let lastPromptSig = "";
+
 /* =========================================================
-   RESIZABLE LAYOUT
+   RESIZABLE LAYOUT (Desktop only)
 ========================================================= */
 const mobileQuery = window.matchMedia("(max-width: 850px)");
 const DEFAULT_LAYOUT = { desk: 0.38, mob: 0.40, collapsed: false };
@@ -580,12 +640,21 @@ function limits(total) {
 function applyLayout() {
     const rect   = workspace.getBoundingClientRect();
     const mobile = isMobile();
-    const total  = mobile ? rect.height : rect.width;
+    
+    if (mobile) {
+        // Mobile doesn't use the splitter layout, it uses view switching
+        rightSection.style.flex = "";
+        splitter.style.flex = "";
+        editorSection.style.flex = "";
+        return;
+    }
+
+    const total  = rect.width;
     const header = parseFloat(getComputedStyle(root).getPropertyValue("--panel-header")) || 43;
 
-    splitter.setAttribute("aria-orientation", mobile ? "horizontal" : "vertical");
+    splitter.setAttribute("aria-orientation", "vertical");
 
-    if (mobile && layout.collapsed) {
+    if (layout.collapsed) {
         rightSection.classList.add("collapsed");
         rightSection.style.flex = `0 0 ${header}px`;
         collapseButton.textContent = "▴";
@@ -598,7 +667,7 @@ function applyLayout() {
     collapseButton.setAttribute("aria-label", "Collapse output");
 
     const { minRight, maxRight } = limits(total);
-    const frac = mobile ? layout.mob : layout.desk;
+    const frac = layout.desk;
     const px = Math.min(Math.max(frac * total, minRight), maxRight);
 
     rightSection.style.flex = `0 0 ${px}px`;
@@ -606,17 +675,17 @@ function applyLayout() {
 }
 
 function setRightSize(px) {
+    if (isMobile()) return;
     const rect   = workspace.getBoundingClientRect();
-    const mobile = isMobile();
-    const total  = mobile ? rect.height : rect.width;
+    const total  = rect.width;
     const { minRight, maxRight } = limits(total);
     px = Math.min(Math.max(px, minRight), maxRight);
-    layout[mobile ? "mob" : "desk"] = px / total;
-    if (mobile) layout.collapsed = false;
+    layout.desk = px / total;
     applyLayout();
 }
 
 function setCollapsed(value) {
+    if (isMobile()) return;
     layout.collapsed = value;
     applyLayout();
     saveLayout();
@@ -625,10 +694,11 @@ function setCollapsed(value) {
 let dragging = false;
 
 splitter.addEventListener("pointerdown", (e) => {
+    if (isMobile()) return;
     dragging = true;
     splitter.setPointerCapture(e.pointerId);
     splitter.classList.add("active");
-    document.body.classList.add("dragging", isMobile() ? "row" : "col");
+    document.body.classList.add("dragging", "col");
     e.preventDefault();
 });
 
@@ -636,8 +706,7 @@ splitter.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     const rect = workspace.getBoundingClientRect();
     const sp   = splitter.getBoundingClientRect();
-    if (isMobile()) setRightSize(rect.bottom - e.clientY - sp.height / 2);
-    else            setRightSize(rect.right  - e.clientX - sp.width  / 2);
+    setRightSize(rect.right - e.clientX - sp.width / 2);
 });
 
 function endDrag(e) {
@@ -645,35 +714,31 @@ function endDrag(e) {
     dragging = false;
     try { splitter.releasePointerCapture(e.pointerId); } catch (err) {}
     splitter.classList.remove("active");
-    document.body.classList.remove("dragging", "row", "col");
+    document.body.classList.remove("dragging", "col");
     saveLayout();
 }
 splitter.addEventListener("pointerup", endDrag);
 splitter.addEventListener("pointercancel", endDrag);
 
 splitter.addEventListener("dblclick", () => {
+    if (isMobile()) return;
     layout = Object.assign({}, DEFAULT_LAYOUT);
     applyLayout();
     saveLayout();
 });
 
 splitter.addEventListener("keydown", (e) => {
+    if (isMobile()) return;
     const rect   = workspace.getBoundingClientRect();
-    const mobile = isMobile();
-    const total  = mobile ? rect.height : rect.width;
-    const current = rightSection.getBoundingClientRect()[mobile ? "height" : "width"];
+    const total  = rect.width;
+    const current = rightSection.getBoundingClientRect().width;
     const step = total * 0.03;
     let handled = true;
 
-    if (mobile) {
-        if (e.key === "ArrowUp")        setRightSize(current + step);
-        else if (e.key === "ArrowDown") setRightSize(current - step);
-        else handled = false;
-    } else {
-        if (e.key === "ArrowLeft")       setRightSize(current + step);
-        else if (e.key === "ArrowRight") setRightSize(current - step);
-        else handled = false;
-    }
+    if (e.key === "ArrowLeft")       setRightSize(current + step);
+    else if (e.key === "ArrowRight") setRightSize(current - step);
+    else handled = false;
+    
     if (e.key === "Home" || e.key === "Enter") {
         layout = Object.assign({}, DEFAULT_LAYOUT);
         applyLayout();
@@ -826,7 +891,7 @@ function replaceAll(text) {
 }
 
 /* =========================================================
-   INPUT() DETECTION
+   SEQUENTIAL INPUT() DETECTION & UI
 ========================================================= */
 function extractInputPrompts() {
     const code = codeEditor.value;
@@ -850,16 +915,16 @@ function extractInputPrompts() {
 
 function hasInputFunction() { return extractInputPrompts().length > 0; }
 
-let lastPromptSig   = "";
-let lastPromptCount = 0;
+function renderNextPrompt() {
+    if (currentPromptIndex >= promptsList.length) return;
 
-function createInputRow(prompt, index, value) {
+    const prompt = promptsList[currentPromptIndex];
     const row = document.createElement("div");
     row.className = "input-row";
 
     const label = document.createElement("span");
     label.className = "input-prompt";
-    label.textContent = prompt || `Input ${index + 1}:`;
+    label.textContent = prompt || `Input ${currentPromptIndex + 1}:`;
     label.title = label.textContent;
 
     const field = document.createElement("input");
@@ -867,79 +932,75 @@ function createInputRow(prompt, index, value) {
     field.type = "text";
     field.placeholder = "Enter value";
     field.setAttribute("aria-label", label.textContent);
-    if (value) field.value = value;
 
     field.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); runCode(); }
+        if (e.key === "Enter") {
+            e.preventDefault();
+            handleInputSubmit(field.value);
+        }
     });
 
     row.appendChild(label);
     row.appendChild(field);
-    return row;
-}
-
-function buildInputRows(prompts, oldValues, extras) {
-    inputBody.innerHTML = "";
-    prompts.forEach((p, i) => inputBody.appendChild(createInputRow(p, i, oldValues[i])));
-    for (let j = 0; j < extras; j++) {
-        const idx = prompts.length + j;
-        inputBody.appendChild(createInputRow("", idx, oldValues[idx]));
-    }
-}
-
-function showInputSection(manual) {
-    const prompts = extractInputPrompts();
-    if (manual && prompts.length === 0) prompts.push("");
-
-    if (prompts.length === 0) {
-        inputSection.classList.remove("visible");
-        inputMode = false;
-        return;
-    }
-
-    buildInputRows(prompts, [], 0);
-    lastPromptSig   = JSON.stringify(prompts);
-    lastPromptCount = prompts.length;
-    inputSection.classList.add("visible");
-    inputMode = true;
-    inputStatus.textContent = "Waiting for input";
-
-    const first = inputBody.querySelector(".input-field");
-    if (first) setTimeout(() => first.focus(), 50);
-}
-
-/* Keep typed values while the code is edited */
-function syncInputRows() {
-    const prompts = extractInputPrompts();
-    if (prompts.length === 0) {
-        inputSection.classList.remove("visible");
-        inputBody.innerHTML = "";
-        inputMode = false;
-        lastPromptSig = "";
-        return;
-    }
-    const sig = JSON.stringify(prompts);
-    if (sig === lastPromptSig) return;
-
-    const old = Array.from(inputBody.querySelectorAll(".input-field")).map(f => f.value);
-    const extras = Math.max(0, old.length - lastPromptCount);
-    buildInputRows(prompts, old, extras);
-    lastPromptSig   = sig;
-    lastPromptCount = prompts.length;
-}
-
-addInputButton.addEventListener("click", () => {
-    const n = inputBody.querySelectorAll(".input-field").length;
-    const row = createInputRow("", n, "");
     inputBody.appendChild(row);
     inputBody.scrollTop = inputBody.scrollHeight;
-    row.querySelector(".input-field").focus();
-});
+    field.focus();
+}
+
+function startInputSequence() {
+    promptsList = extractInputPrompts();
+    if (promptsList.length === 0) {
+        inputSection.classList.remove("visible");
+        inputMode = false;
+        return false;
+    }
+
+    collectedInputs = [];
+    currentPromptIndex = 0;
+    lastPromptSig = JSON.stringify(promptsList);
+
+    inputBody.innerHTML = "";
+    inputSection.classList.add("visible");
+    inputMode = true;
+    inputStatus.textContent = `Waiting for input 1 of ${promptsList.length}`;
+    renderNextPrompt();
+    return true;
+}
+
+function handleInputSubmit(value) {
+    collectedInputs.push(value);
+
+    // Convert the last input field to static text to preserve history
+    const lastRow = inputBody.lastChild;
+    const field = lastRow.querySelector(".input-field");
+    const staticValue = document.createElement("span");
+    staticValue.className = "input-history-value";
+    staticValue.textContent = value;
+    lastRow.replaceChild(staticValue, field);
+
+    currentPromptIndex++;
+    if (currentPromptIndex < promptsList.length) {
+        inputStatus.textContent = `Waiting for input ${currentPromptIndex + 1} of ${promptsList.length}`;
+        renderNextPrompt();
+    } else {
+        inputStatus.textContent = "All inputs received. Running...";
+        executeCode();
+    }
+}
+
+/* Keep typed values while the code is edited (restarts sequential input if prompts change) */
+function syncInputRows() {
+    if (!inputMode) return;
+    const newPrompts = extractInputPrompts();
+    const sig = JSON.stringify(newPrompts);
+    if (sig === lastPromptSig) return;
+
+    lastPromptSig = sig;
+    startInputSequence();
+}
 
 function getUserInput() {
-    return Array.from(inputBody.querySelectorAll(".input-field"))
-        .map(f => f.value)
-        .join("\n");
+    return collectedInputs.join("\n");
 }
 
 /* Python's input("prompt") echoes the prompt to stdout; remove it from the output */
@@ -1038,8 +1099,6 @@ async function runCode() {
     if (running) return;
 
     const code = codeEditor.value;
-    if (layout.collapsed) setCollapsed(false);
-
     if (!code.trim()) {
         outputConsole.innerHTML =
             `<div class="output-error">Please enter some Python code.</div>`;
@@ -1047,14 +1106,31 @@ async function runCode() {
         return;
     }
 
+    if (isMobile()) {
+        document.body.classList.add("shell-view");
+    } else {
+        if (layout.collapsed) setCollapsed(false);
+    }
+
     if (hasInputFunction() && !inputMode) {
         outputConsole.innerHTML =
             `<div class="output-placeholder">Enter the required values above, then click Run again.</div>`;
-        showInputSection();
+        startInputSequence();
         setStatus("running", "Waiting for input");
         return;
     }
 
+    // If in input mode but haven't finished sequence, focus the active field
+    if (inputMode && currentPromptIndex < promptsList.length) {
+        const activeField = inputBody.querySelector(".input-field");
+        if (activeField) activeField.focus();
+        return;
+    }
+
+    await executeCode();
+}
+
+async function executeCode() {
     running = true;
     errorLine = null;
     renderGutter();
@@ -1076,7 +1152,7 @@ async function runCode() {
         const resp = await fetch("/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, input: userInput }),
+            body: JSON.stringify({ code: codeEditor.value, input: userInput }),
             signal: abortCtrl.signal,
         });
         const data = await resp.json();
@@ -1108,8 +1184,7 @@ async function runCode() {
             let errText = data.error || "Program error.";
             if (/EOFError/.test(errText)) {
                 errText += "\n\nHint: the program asked for more input() values than were provided. " +
-                           "Enter the values in Program Input (use + Add for extra ones) and run again.";
-                if (!inputMode) showInputSection(true);
+                           "Make sure your code has the right number of input() calls and run again.";
             }
 
             const err = document.createElement("div");
@@ -1144,6 +1219,11 @@ async function runCode() {
 }
 
 function stopRun() { if (abortCtrl) abortCtrl.abort(); }
+
+headerBackBtn.addEventListener("click", () => {
+    document.body.classList.remove("shell-view");
+    if (!isCoarse) codeEditor.focus();
+});
 
 /* =========================================================
    CLEAR / RESET / COPY / DOWNLOAD
@@ -1489,7 +1569,22 @@ stopButton.addEventListener("click", stopRun);
 clearButton.addEventListener("click", clearCode);
 resetButton.addEventListener("click", resetCode);
 
+/* =========================================================
+   PHONE LAYOUT: Run / Stop become a round button over the editor
+========================================================= */
+const phoneQuery    = window.matchMedia("(max-width: 600px)");
+const runControls   = document.getElementById("runControls");
+const headerRight   = document.querySelector(".header-right");
+const editorSection = document.getElementById("editorSection");
+
+function placeRunControls() {
+    const target = phoneQuery.matches ? editorSection : headerRight;
+    if (runControls.parentElement !== target) target.appendChild(runControls);
+}
+if (phoneQuery.addEventListener) phoneQuery.addEventListener("change", placeRunControls);
+
 /* INIT */
+placeRunControls();
 loadCode();
 applyFont();
 updateLineNumbers();
