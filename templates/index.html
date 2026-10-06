@@ -311,14 +311,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 }
 .editor-search button:hover { background: #f7f7f8; color: #374151; }
 .search-count { min-width: 38px; text-align: center; font-size: 10px; color: #9ca3af; }
-.error-hint {
-    margin-bottom: 10px; padding: 9px 10px;
-    border: 1px solid #fde68a; border-radius: 7px;
-    background: #fffbeb; color: #92400e;
-    font-family: Inter, Arial, sans-serif; font-size: 12px; line-height: 18px;
-}
-.error-hint strong { color: #78350f; }
-
 .token.comment                       { color: #8b949e; font-style: italic; }
 .token.string, .token.triple-quoted-string,
 .token.char                          { color: #0a7d5a; }
@@ -1528,21 +1520,7 @@ async function runCode() {
     await executeCode();
 }
 
-function getFriendlyErrorHint(errorText) {
-    const text = String(errorText || "");
-    if (/NameError/i.test(text)) return "Python cannot find a name you used. Check the spelling and make sure the variable was created before you use it.";
-    if (/SyntaxError/i.test(text)) return "Python could not understand this line. Check brackets, quotes, commas, and the spelling of the Python statement.";
-    if (/IndentationError|TabError/i.test(text)) return "The spaces at the start of a line do not match. Use 4 spaces for each indentation level.";
-    if (/TypeError/i.test(text)) return "Two values or operations do not match. Check the type of each value and what the function expects.";
-    if (/IndexError/i.test(text)) return "You tried to use a list position that does not exist. Remember that Python list positions start at 0.";
-    if (/KeyError/i.test(text)) return "That dictionary key was not found. Check the key spelling before using it.";
-    if (/ZeroDivisionError/i.test(text)) return "A number was divided by zero. Check the value used as the divisor.";
-    if (/ValueError/i.test(text)) return "The value is not in the form Python expected. Check your input and conversion such as int() or float().";
-    if (/AttributeError/i.test(text)) return "Python could not find that property or method. Check the object type and spelling.";
-    if (/ModuleNotFoundError|ImportError/i.test(text)) return "Python could not find the module you tried to import. Check the module name and whether it is available.";
-    if (/EOFError/i.test(text)) return "The program asked for more input values than were provided. Check the number of input() calls.";
-    return "Read the highlighted line first, then check the spelling, brackets, quotes, and indentation around it.";
-}
+
 
 async function executeCode() {
     running = true;
@@ -1600,14 +1578,6 @@ async function executeCode() {
                 errText += "\n\nHint: the program asked for more input() values than were provided. " +
                            "Make sure your code has the right number of input() calls and run again.";
             }
-
-            const hint = document.createElement("div");
-            hint.className = "error-hint";
-            const hintLabel = document.createElement("strong");
-            hintLabel.textContent = "💡 Hint: ";
-            hint.appendChild(hintLabel);
-            hint.appendChild(document.createTextNode(getFriendlyErrorHint(errText)));
-            outputConsole.appendChild(hint);
 
             const err = document.createElement("div");
             err.className = "output-error";
