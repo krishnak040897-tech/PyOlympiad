@@ -14,7 +14,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
 
-
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.SECRET_KEY
 
@@ -22,11 +21,9 @@ app.config["SECRET_KEY"] = config.SECRET_KEY
 # is the real client IP.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
-
 _slots = threading.BoundedSemaphore(config.MAX_CONCURRENT_RUNS)
 _hits = defaultdict(deque)
 _hits_lock = threading.Lock()
-
 
 # ------------------------------------------------------------
 #  Isolated Linux launcher
@@ -78,7 +75,6 @@ try:
 except Exception:
     pass
 
-
 # IMPORTANT:
 # -I isolates the Python environment.
 # PYTHONIOENCODING is therefore not sufficient.
@@ -94,7 +90,6 @@ os.execv(
     ],
 )
 """
-
 
 # ------------------------------------------------------------
 #  Helpers
@@ -116,7 +111,6 @@ def _sanitize(text, temp_path):
 
     return text
 
-
 def _truncate(text, limit):
     """
     Keep returned output within the configured response size.
@@ -125,7 +119,6 @@ def _truncate(text, limit):
         return text[:limit] + "\n... [output truncated]"
 
     return text or ""
-
 
 def _read(path, limit):
     """
@@ -146,7 +139,6 @@ def _read(path, limit):
 
     except OSError:
         return ""
-
 
 def _clean_env(workdir):
     """
@@ -186,7 +178,6 @@ def _clean_env(workdir):
 
     return env
 
-
 def _rate_limited(ip):
     """
     Basic per-IP rate limiter.
@@ -219,7 +210,6 @@ def _rate_limited(ip):
 
         return False
 
-
 def _kill(proc):
     """
     Kill a running student process and wait briefly for cleanup.
@@ -246,7 +236,6 @@ def _kill(proc):
 
     except Exception:
         pass
-
 
 # ------------------------------------------------------------
 #  Optional site-wide password
@@ -291,7 +280,6 @@ def _require_login():
         },
     )
 
-
 # ------------------------------------------------------------
 #  Routes
 # ------------------------------------------------------------
@@ -300,11 +288,9 @@ def _require_login():
 def index():
     return render_template("index.html")
 
-
 @app.route("/health")
 def health():
     return "ok", 200
-
 
 @app.route("/run", methods=["POST"])
 def run_code():
@@ -673,7 +659,6 @@ def run_code():
             )
 
         _slots.release()
-
 
 # ------------------------------------------------------------
 #  Entry point
