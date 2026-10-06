@@ -472,15 +472,18 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
                     <button class="tool-button" id="fontDown" title="Smaller text" aria-label="Decrease font size">A−</button>
                     <button class="tool-button" id="fontUp" title="Larger text" aria-label="Increase font size">A+</button>
                 </div>
+                <button class="tool-button" id="openButton" title="Open a text/code file" aria-label="Open file">Open</button>
+                <button class="tool-button" id="saveAsButton" title="Save As" aria-label="Save As">Save As</button>
+                <button class="tool-button" id="renameButton" title="Rename the current Python program" aria-label="Rename program">Rename</button>
+                <button class="tool-button" id="undoButton" title="Undo (Ctrl+Z)" aria-label="Undo">Undo</button>
+                <button class="tool-button" id="redoButton" title="Redo (Ctrl+Y)" aria-label="Redo">Redo</button>
                 <button class="tool-button" id="copyCodeButton" title="Copy code">Copy</button>
-                <button class="tool-button" id="downloadButton" title="Download main.py" aria-label="Download main.py">
-                    <span class="lbl-full">Download</span><span class="lbl-short">⬇</span>
-                </button>
                 <button class="tool-button" id="clearButton" title="Clear the editor (Ctrl+Z to undo)">Clear</button>
                 <button class="tool-button" id="resetButton" title="Restore the starter code (Ctrl+Z to undo)">Reset</button>
             </div>
         </div>
 
+        <input type="file" id="openFileInput" accept=".py,text/x-python,application/x-python-code" hidden>
         <div class="editor-container">
             <div class="editor">
                 <div class="line-numbers" id="lineNumbers"></div>
@@ -571,8 +574,14 @@ const clearButton     = document.getElementById("clearButton");
 const resetButton     = document.getElementById("resetButton");
 const fontDown        = document.getElementById("fontDown");
 const fontUp          = document.getElementById("fontUp");
+const openButton      = document.getElementById("openButton");
+const saveAsButton    = document.getElementById("saveAsButton");
+const renameButton    = document.getElementById("renameButton");
+const undoButton      = document.getElementById("undoButton");
+const redoButton      = document.getElementById("redoButton");
+const openFileInput   = document.getElementById("openFileInput");
 const copyCodeButton  = document.getElementById("copyCodeButton");
-const downloadButton  = document.getElementById("downloadButton");
+const fileNameDisplay = document.querySelector(".file-name");
 const inputSection    = document.getElementById("inputSection");
 const inputBody       = document.getElementById("inputBody");
 const inputStatus     = document.getElementById("inputStatus");
@@ -1490,8 +1499,182 @@ headerBackBtn.addEventListener("click", () => {
 });
 
 /* =========================================================
-   CLEAR / RESET / COPY / DOWNLOAD
+   OPEN / SAVE AS / UNDO / REDO / CLEAR / RESET / COPY
 ========================================================= */
+
+let currentFileName = "main.py";
+
+function updateFileName(name) {
+    currentFileName = name || "main.py";
+    if (fileNameDisplay) fileNameDisplay.textContent = currentFileName;
+}
+
+function undoEdit() {
+    codeEditor.focus();
+    try {
+        document.execCommand("undo");
+    } catch (e) {}
+    saveCode();
+    updateLineNumbers();
+}
+
+function redoEdit() {
+    codeEditor.focus();
+    try {
+        document.execCommand("redo");
+    } catch (e) {}
+    saveCode();
+    updateLineNumbers();
+}
+
+function openSelectedFile(file) {
+    if (!file) return;
+
+    const filename = file.name || "";
+    if (!/\.py$/i.test(filename)) {
+        openFileInput.value = "";
+        outputConsole.innerHTML =
+            `<div class="output-error">Only Python (.py) files can be opened.</div>`;
+        setStatus("error", "Python files only");
+        return;
+    }
+
+    file.text().then((text) => {
+        hideInputs();
+        resetOutput();
+
+        /*
+         * setRangeText is used so the browser keeps the textarea's
+         * normal edit/selection behavior. The loaded document becomes
+         * the current editor content without changing the editor UI.
+         */
+        codeEditor.focus();
+        codeEditor.setSelectionRange(0, codeEditor.value.length);
+        codeEditor.setRangeText(text, 0, codeEditor.value.length, "end");
+
+        updateFileName(file.name);
+        saveCode();
+        updateLineNumbers();
+
+        if (!isCoarse) codeEditor.focus();
+    }).catch(() => {
+        outputConsole.innerHTML =
+            `<div class="output-error">Unable to open the selected file.</div>`;
+        setStatus("error", "Open Error");
+    }).finally(() => {
+        openFileInput.value = "";
+    });
+}
+
+function normalizePythonFileName(name, fallback = "main.py") {
+    let filename = (name || "").trim();
+    if (!filename) filename = fallback;
+
+    // Keep this application Python-only. Remove path separators so the
+    // browser/OS controls the destination folder, not the typed filename.
+    filename = filename.replace(/[\\/]+/g, "");
+
+    if (!/\.py$/i.test(filename)) {
+        filename = filename.replace(/\.[^./\\]*$/, "") + ".py";
+    }
+
+    return filename || "main.py";
+}
+
+async function chooseSaveLocation(suggestedName, description) {
+    const filename = normalizePythonFileName(suggestedName);
+
+    // Desktop Chromium browsers can open the real Save As picker. This avoids
+    // the normal browser download flow and lets the user choose a folder.
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: description || "Python program",
+                    accept: { "text/x-python": [".py"] }
+                }],
+                excludeAcceptAllOption: true
+            });
+
+            const finalName = normalizePythonFileName(handle.name, filename);
+            const writable = await handle.createWritable();
+            await writable.write(codeEditor.value);
+            await writable.close();
+
+            updateFileName(finalName);
+            saveCode();
+            setStatus("ready", `Saved · ${finalName}`);
+            return true;
+        } catch (err) {
+            // Closing/cancelling the native dialog is normal.
+            if (err && err.name === "AbortError") return false;
+
+            setStatus("error", "Save Error");
+            outputConsole.innerHTML =
+                `<div class="output-error">Unable to save the Python program to that location.</div>`;
+            return false;
+        }
+    }
+
+    // Android/mobile browsers commonly do not provide showSaveFilePicker.
+    // Do NOT fall back to an <a download> because an HTTP LAN address can
+    // trigger Chrome's "File can't be downloaded securely" warning.
+    const file = new File([codeEditor.value], filename, {
+        type: "text/x-python;charset=utf-8"
+    });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                title: filename,
+                text: "Python program",
+                files: [file]
+            });
+            updateFileName(filename);
+            saveCode();
+            setStatus("ready", `Ready to save · ${filename}`);
+            return true;
+        } catch (err) {
+            if (err && err.name === "AbortError") return false;
+        }
+    }
+
+    setStatus("error", "Save As unavailable");
+    outputConsole.innerHTML =
+        `<div class="output-error">On mobile, use the Share/Files option to save the Python program. A direct browser download is disabled to avoid insecure-download warnings.</div>`;
+    return false;
+}
+
+async function saveAsFile() {
+    await chooseSaveLocation(currentFileName || "main.py", "Save Python program as");
+}
+
+function renameProgram() {
+    const requestedName = window.prompt("Rename Python program:", currentFileName || "main.py");
+    if (requestedName === null) return;
+
+    const filename = normalizePythonFileName(requestedName, currentFileName || "main.py");
+    updateFileName(filename);
+    saveCode();
+    setStatus("ready", `Program renamed · ${filename}`);
+}
+
+openButton.addEventListener("click", () => {
+    openFileInput.click();
+});
+
+openFileInput.addEventListener("change", () => {
+    const file = openFileInput.files && openFileInput.files[0];
+    openSelectedFile(file);
+});
+
+saveAsButton.addEventListener("click", saveAsFile);
+renameButton.addEventListener("click", renameProgram);
+
+undoButton.addEventListener("click", undoEdit);
+redoButton.addEventListener("click", redoEdit);
+
 function hideInputs() {
     resetExecutionInputState();
 }
@@ -1507,6 +1690,13 @@ function resetCode() {
     hideInputs();
     resetOutput();
     replaceAll(DEFAULT_CODE);
+
+    // Reset the program back to the original starter state as well.
+    // This keeps the displayed program name in sync with the reset code.
+    updateFileName("main.py");
+    saveCode();
+
+    setStatus("ready", "Reset · main.py");
     if (!isCoarse) codeEditor.focus();
 }
 
@@ -1516,17 +1706,6 @@ copyCodeButton.addEventListener("click", () => {
         .catch(() => flashLabel(copyCodeButton, "Failed"));
 });
 
-downloadButton.addEventListener("click", () => {
-    const blob = new Blob([codeEditor.value], { type: "text/x-python" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url;
-    a.download = "main.py";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
 
 /* PERSISTENCE */
 function saveCode() {
@@ -1770,11 +1949,34 @@ codeEditor.addEventListener("keydown", (e) => {
     }
 });
 
-/* Ctrl+S : save */
+/* File + editing shortcuts */
 window.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+
+    if (e.key === "s" || e.key === "S") {
         e.preventDefault();
-        saveCode();
+        if (e.shiftKey) saveAsFile();
+        else saveCode();
+        return;
+    }
+
+    if (e.key === "o" || e.key === "O") {
+        e.preventDefault();
+        openFileInput.click();
+        return;
+    }
+
+    if ((e.key === "z" || e.key === "Z") && !e.shiftKey) {
+        e.preventDefault();
+        undoEdit();
+        return;
+    }
+
+    if (e.key === "y" || e.key === "Y" ||
+        ((e.key === "z" || e.key === "Z") && e.shiftKey)) {
+        e.preventDefault();
+        redoEdit();
     }
 });
 
