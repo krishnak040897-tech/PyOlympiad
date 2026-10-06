@@ -311,6 +311,14 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 }
 .editor-search button:hover { background: #f7f7f8; color: #374151; }
 .search-count { min-width: 38px; text-align: center; font-size: 10px; color: #9ca3af; }
+.error-hint {
+    margin-bottom: 10px; padding: 9px 10px;
+    border: 1px solid #fde68a; border-radius: 7px;
+    background: #fffbeb; color: #92400e;
+    font-family: Inter, Arial, sans-serif; font-size: 12px; line-height: 18px;
+}
+.error-hint strong { color: #78350f; }
+
 .token.comment                       { color: #8b949e; font-style: italic; }
 .token.string, .token.triple-quoted-string,
 .token.char                          { color: #0a7d5a; }
@@ -428,8 +436,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 }
 .small-button.visible { display: inline-block; }
 .small-button:hover { background: #f7f7f8; color: #374151; }
-.collapse-button { display: none; width: 28px; padding: 0; font-size: 12px; }
-
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; }
 .status-dot.ready   { background: #22c55e; }
 .status-dot.running { background: #f59e0b; }
@@ -445,9 +451,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .output-error { color: var(--error); white-space: pre-wrap; }
 .error-link { color: #b91c1c; text-decoration: underline; cursor: pointer; font-weight: 600; }
 .error-link:hover { color: #7f1d1d; }
-
-.right-section.collapsed .output-console,
-.right-section.collapsed .input-section { display: none; }
 
 /* ================= TABLET / MOBILE: DEDICATED SHELL SCREEN ================= */
 @media (max-width: 850px) {
@@ -522,7 +525,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     .input-field { font-size: 16px; height: 38px; }
     .input-history-value { font-size: 16px; height: 38px; }
     .tool-button, .small-button { height: 34px; }
-    .collapse-button { width: 34px; }
     :root { --splitter: 14px; }
 }
 
@@ -671,8 +673,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
                         <span class="status-dot ready" id="statusDot"></span>
                         <span id="statusText">Ready</span>
                     </span>
-                    <button class="small-button collapse-button visible" id="collapseButton"
-                            aria-label="Collapse output" title="Collapse / expand output">▾</button>
                 </div>
             </div>
             <div class="output-console" id="outputConsole" role="log" aria-live="polite">
@@ -730,7 +730,6 @@ const cursorPosition  = document.getElementById("cursorPosition");
 const charCount       = document.getElementById("charCount");
 const copyButton      = document.getElementById("copyButton");
 const clearOutputBtn  = document.getElementById("clearOutputButton");
-const collapseButton  = document.getElementById("collapseButton");
 const headerBackBtn   = document.getElementById("headerBackButton");
 const editorSearch    = document.getElementById("editorSearch");
 const searchInput     = document.getElementById("searchInput");
@@ -769,7 +768,7 @@ let lastPromptSig = "";
    RESIZABLE LAYOUT (Desktop only)
 ========================================================= */
 const mobileQuery = window.matchMedia("(max-width: 850px)");
-const DEFAULT_LAYOUT = { desk: 0.38, mob: 0.40, collapsed: false };
+const DEFAULT_LAYOUT = { desk: 0.38, mob: 0.40 };
 let layout = Object.assign({}, DEFAULT_LAYOUT);
 
 try {
@@ -805,21 +804,11 @@ function applyLayout() {
     }
 
     const total  = rect.width;
-    const header = parseFloat(getComputedStyle(root).getPropertyValue("--panel-header")) || 43;
-
     splitter.setAttribute("aria-orientation", "vertical");
 
-    if (layout.collapsed) {
-        rightSection.classList.add("collapsed");
-        rightSection.style.flex = `0 0 ${header}px`;
-        collapseButton.textContent = "▴";
-        collapseButton.setAttribute("aria-label", "Expand output");
-        return;
-    }
-
-    rightSection.classList.remove("collapsed");
-    collapseButton.textContent = "▾";
-    collapseButton.setAttribute("aria-label", "Collapse output");
+    // Keep the output panel resizable with the splitter.
+    // The old collapse arrow has been removed, so the panel always uses
+    // the saved splitter size instead of switching to a collapsed state.
 
     const { minRight, maxRight } = limits(total);
     const frac = layout.desk;
@@ -837,13 +826,6 @@ function setRightSize(px) {
     px = Math.min(Math.max(px, minRight), maxRight);
     layout.desk = px / total;
     applyLayout();
-}
-
-function setCollapsed(value) {
-    if (isMobile()) return;
-    layout.collapsed = value;
-    applyLayout();
-    saveLayout();
 }
 
 let dragging = false;
@@ -902,7 +884,6 @@ splitter.addEventListener("keydown", (e) => {
     if (handled) { e.preventDefault(); saveLayout(); }
 });
 
-collapseButton.addEventListener("click", () => setCollapsed(!layout.collapsed));
 window.addEventListener("resize", applyLayout);
 window.addEventListener("orientationchange", () => setTimeout(applyLayout, 150));
 if (mobileQuery.addEventListener) mobileQuery.addEventListener("change", applyLayout);
@@ -1534,8 +1515,6 @@ async function runCode() {
 
     if (isMobile()) {
         document.body.classList.add("shell-view");
-    } else {
-        if (layout.collapsed) setCollapsed(false);
     }
 
     if (hasInputFunction()) {
@@ -1549,6 +1528,21 @@ async function runCode() {
     await executeCode();
 }
 
+function getFriendlyErrorHint(errorText) {
+    const text = String(errorText || "");
+    if (/NameError/i.test(text)) return "Python cannot find a name you used. Check the spelling and make sure the variable was created before you use it.";
+    if (/SyntaxError/i.test(text)) return "Python could not understand this line. Check brackets, quotes, commas, and the spelling of the Python statement.";
+    if (/IndentationError|TabError/i.test(text)) return "The spaces at the start of a line do not match. Use 4 spaces for each indentation level.";
+    if (/TypeError/i.test(text)) return "Two values or operations do not match. Check the type of each value and what the function expects.";
+    if (/IndexError/i.test(text)) return "You tried to use a list position that does not exist. Remember that Python list positions start at 0.";
+    if (/KeyError/i.test(text)) return "That dictionary key was not found. Check the key spelling before using it.";
+    if (/ZeroDivisionError/i.test(text)) return "A number was divided by zero. Check the value used as the divisor.";
+    if (/ValueError/i.test(text)) return "The value is not in the form Python expected. Check your input and conversion such as int() or float().";
+    if (/AttributeError/i.test(text)) return "Python could not find that property or method. Check the object type and spelling.";
+    if (/ModuleNotFoundError|ImportError/i.test(text)) return "Python could not find the module you tried to import. Check the module name and whether it is available.";
+    if (/EOFError/i.test(text)) return "The program asked for more input values than were provided. Check the number of input() calls.";
+    return "Read the highlighted line first, then check the spelling, brackets, quotes, and indentation around it.";
+}
 
 async function executeCode() {
     running = true;
@@ -1601,7 +1595,19 @@ async function executeCode() {
                 outputConsole.appendChild(block);
             }
 
-            const errText = data.error || "Program error.";
+            let errText = data.error || "Program error.";
+            if (/EOFError/.test(errText)) {
+                errText += "\n\nHint: the program asked for more input() values than were provided. " +
+                           "Make sure your code has the right number of input() calls and run again.";
+            }
+
+            const hint = document.createElement("div");
+            hint.className = "error-hint";
+            const hintLabel = document.createElement("strong");
+            hintLabel.textContent = "💡 Hint: ";
+            hint.appendChild(hintLabel);
+            hint.appendChild(document.createTextNode(getFriendlyErrorHint(errText)));
+            outputConsole.appendChild(hint);
 
             const err = document.createElement("div");
             err.className = "output-error";
@@ -1828,6 +1834,7 @@ function openSelectedFile(file) {
         const existing = fileTabs.find(tab => tab.name.toLowerCase() === file.name.toLowerCase());
         if (existing) {
             existing.code = text;
+
             currentTabId = existing.id;
         } else {
             const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1890,6 +1897,7 @@ async function chooseSaveLocation(suggestedName, description) {
             await writable.close();
 
             updateFileName(finalName);
+            markClean();
             saveCode();
             setStatus("ready", `Saved · ${finalName}`);
             return true;
@@ -1904,12 +1912,64 @@ async function chooseSaveLocation(suggestedName, description) {
         }
     }
 
-    // Save As must mean "choose the location". Do not use an <a download>
-    // fallback here because that silently sends the file to the browser's
-    // Downloads folder instead of letting the user choose a destination.
-    setStatus("error", "Save As unavailable");
+    // Android/mobile browsers commonly do not provide showSaveFilePicker.
+    // Do NOT fall back to an <a download> because an HTTP LAN address can
+    // trigger Chrome's "File can't be downloaded securely" warning.
+    const file = new File([codeEditor.value], filename, {
+        type: "text/x-python;charset=utf-8"
+    });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                title: filename,
+                text: "Python program",
+                files: [file]
+            });
+            updateFileName(filename);
+            markClean();
+            saveCode();
+            setStatus("ready", `Saved · ${filename}`);
+            return true;
+        } catch (err) {
+            if (err && err.name === "AbortError") return false;
+        }
+    }
+
+    // Mobile fallback: if the browser cannot expose a real Save As picker
+    // and cannot share files, use the normal browser file-save/download flow
+    // only from a secure page. This makes the button functional on more
+    // Android browsers while avoiding the insecure-download warning caused by
+    // serving the app over plain HTTP.
+    if (window.isSecureContext || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        try {
+            const blob = new Blob([codeEditor.value], { type: "text/x-python;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+            updateFileName(filename);
+            markClean();
+            saveCode();
+            setStatus("ready", `Saved · ${filename}`);
+            return true;
+        } catch (err) {
+            setStatus("error", "Save Error");
+            outputConsole.innerHTML =
+                `<div class="output-error">The browser could not save the Python program. Please use Chrome or Edge over HTTPS.</div>`;
+            return false;
+        }
+    }
+
+    setStatus("error", "Secure connection required");
     outputConsole.innerHTML =
-        `<div class="output-error">This browser does not provide a Save As location picker. Open PyOlympiad in a browser that supports the File System Access API (for example, Chrome or Edge) and use Save As again.</div>`;
+        `<div class="output-error">Mobile Save As needs HTTPS. Open PyOlympiad using an HTTPS address, then tap Save As again.</div>`;
     return false;
 }
 
@@ -1920,6 +1980,7 @@ async function saveCurrentFile() {
             const writable = await tab.fileHandle.createWritable();
             await writable.write(codeEditor.value);
             await writable.close();
+            markClean();
             saveCode();
             setStatus("ready", `Saved · ${currentFileName}`);
             return;
