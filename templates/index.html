@@ -560,6 +560,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 const root            = document.documentElement;
 const workspace       = document.getElementById("workspace");
 const rightSection    = document.getElementById("rightSection");
+const editorSection   = document.getElementById("editorSection");
 const splitter        = document.getElementById("splitter");
 const codeEditor      = document.getElementById("codeEditor");
 const highlightLayer  = document.getElementById("highlightLayer");
@@ -930,7 +931,8 @@ function renderNextPrompt() {
     const field = document.createElement("input");
     field.className = "input-field";
     field.type = "text";
-    field.placeholder = "Enter value";
+    /* No placeholder: the input box stays completely blank. The prompt
+       text (e.g. "Enter number") is shown beside it by the label above. */
     field.setAttribute("aria-label", label.textContent);
 
     field.addEventListener("keydown", (e) => {
@@ -947,7 +949,24 @@ function renderNextPrompt() {
     field.focus();
 }
 
+function resetExecutionInputState() {
+    // Every Run starts with a completely new input/execution session.
+    // Do not carry over any values, queue entries, indexes, or prompt state.
+    inputMode = false;
+    promptsList = [];
+    collectedInputs = [];
+    currentPromptIndex = 0;
+    lastPromptSig = "";
+    errorLine = null;
+
+    inputSection.classList.remove("visible");
+    inputBody.innerHTML = "";
+    inputStatus.textContent = "Waiting for input";
+}
+
 function startInputSequence() {
+    // startInputSequence is also safe to call independently; always rebuild
+    // the sequential input UI from the current editor contents.
     promptsList = extractInputPrompts();
     if (promptsList.length === 0) {
         inputSection.classList.remove("visible");
@@ -1041,33 +1060,282 @@ function showOutputButtons() {
     clearOutputBtn.classList.add("visible");
 }
 
-/* Turn  File "main.py", line N  in a traceback into clickable links */
-function renderErrorText(text) {
-    const frag = document.createDocumentFragment();
-    const re = /(File "main\.py", )(line (\d+))/g;
-    let last = 0, m, lastLine = null;
-    while ((m = re.exec(text)) !== null) {
-        frag.appendChild(document.createTextNode(text.slice(last, m.index + m[1].length)));
-        const a = document.createElement("a");
-        a.href = "#";
-        a.className = "error-link";
-        a.textContent = m[2];
-        a.dataset.line = m[3];
-        a.title = "Go to this line";
-        frag.appendChild(a);
-        last = m.index + m[0].length;
-        lastLine = parseInt(m[3], 10);
+/*
+ * ANSI / SGR terminal renderer.
+ *
+ * The parser is deliberately stateful: push() may receive an arbitrary
+ * chunk and keeps an incomplete ESC[... sequence until the next chunk.
+ * This keeps the renderer safe for streamed/chunked terminal data even
+ * though the current /run endpoint returns one JSON response.
+ *
+ * Normal output is ALWAYS inserted with createTextNode/textContent.
+ * Only spans created by this renderer receive styles, so stdout/stderr
+ * cannot inject HTML into the Shell Output.
+ */
+class AnsiTerminalRenderer {
+    constructor() {
+        this.buffer = "";
+        this.state = {
+            bold: false,
+            italic: false,
+            underline: false,
+            foreground: null,
+            background: null,
+        };
     }
-    frag.appendChild(document.createTextNode(text.slice(last)));
-    return { frag, lastLine };
+
+    push(chunk) {
+        if (chunk === null || chunk === undefined) return document.createDocumentFragment();
+        this.buffer += String(chunk);
+        return this._parse(false);
+    }
+
+    finish() {
+        return this._parse(true);
+    }
+
+    _parse(flush) {
+        const frag = document.createDocumentFragment();
+        let text = "";
+
+        const emitText = () => {
+            if (!text) return;
+            if (this._hasStyle()) {
+                const span = document.createElement("span");
+                span.style.cssText = this._styleText();
+                span.textContent = text;
+                frag.appendChild(span);
+            } else {
+                frag.appendChild(document.createTextNode(text));
+            }
+            text = "";
+        };
+
+        const source = this.buffer;
+        let i = 0;
+
+        while (i < source.length) {
+            const ch = source[i];
+
+            if (ch !== "\x1b") {
+                text += ch;
+                i++;
+                continue;
+            }
+
+            // ESC[ ... final-byte is a CSI sequence. Keep incomplete data
+            // for the next chunk instead of displaying it as raw text.
+            if (i + 1 >= source.length) {
+                if (!flush) break;
+                i++;
+                continue;
+            }
+
+            if (source[i + 1] !== "[") {
+                // Unknown ANSI escape: consume the ESC itself, but preserve
+                // the following printable character as normal terminal text.
+                i++;
+                continue;
+            }
+
+            let j = i + 2;
+            while (j < source.length && !(source.charCodeAt(j) >= 0x40 && source.charCodeAt(j) <= 0x7e)) {
+                j++;
+            }
+
+            if (j >= source.length) {
+                if (!flush) break;
+                // Incomplete sequence at the end of the final chunk: do not
+                // leak its control syntax into the Shell Output.
+                i = source.length;
+                continue;
+            }
+
+            const finalByte = source[j];
+            const paramsText = source.slice(i + 2, j);
+            emitText();
+
+            if (finalByte === "m") {
+                this._applySgr(paramsText);
+            }
+
+            i = j + 1;
+        }
+
+        if (flush || i > 0) {
+            this.buffer = source.slice(i);
+        }
+        emitText();
+        return frag;
+    }
+
+    _applySgr(paramsText) {
+        let params;
+        if (paramsText === "" || paramsText === ";") {
+            params = [0];
+        } else {
+            params = paramsText.split(";").map(v => v === "" ? 0 : Number(v));
+        }
+
+        for (let i = 0; i < params.length; i++) {
+            const code = params[i];
+            if (!Number.isFinite(code)) continue;
+
+            if (code === 0) {
+                this.state.bold = false;
+                this.state.italic = false;
+                this.state.underline = false;
+                this.state.foreground = null;
+                this.state.background = null;
+            } else if (code === 1) {
+                this.state.bold = true;
+            } else if (code === 22) {
+                this.state.bold = false;
+            } else if (code === 3) {
+                this.state.italic = true;
+            } else if (code === 23) {
+                this.state.italic = false;
+            } else if (code === 4) {
+                this.state.underline = true;
+            } else if (code === 24) {
+                this.state.underline = false;
+            } else if (code === 39) {
+                this.state.foreground = null;
+            } else if (code === 49) {
+                this.state.background = null;
+            } else if (code >= 30 && code <= 37) {
+                this.state.foreground = ANSI_COLORS[code - 30];
+            } else if (code >= 40 && code <= 47) {
+                this.state.background = ANSI_COLORS[code - 40];
+            } else if (code >= 90 && code <= 97) {
+                this.state.foreground = ANSI_BRIGHT_COLORS[code - 90];
+            } else if (code >= 100 && code <= 107) {
+                this.state.background = ANSI_BRIGHT_COLORS[code - 100];
+            } else if (code === 38 || code === 48) {
+                const isBackground = code === 48;
+                const mode = params[i + 1];
+
+                if (mode === 5 && Number.isFinite(params[i + 2])) {
+                    const color = ansi256Color(params[i + 2]);
+                    if (isBackground) this.state.background = color;
+                    else this.state.foreground = color;
+                    i += 2;
+                } else if (mode === 2 && params.length >= i + 5 &&
+                           params.slice(i + 2, i + 5).every(Number.isFinite)) {
+                    const color = `rgb(${params[i + 2]}, ${params[i + 3]}, ${params[i + 4]})`;
+                    if (isBackground) this.state.background = color;
+                    else this.state.foreground = color;
+                    i += 4;
+                }
+            }
+        }
+    }
+
+    _hasStyle() {
+        return this.state.bold || this.state.italic || this.state.underline ||
+               !!this.state.foreground || !!this.state.background;
+    }
+
+    _styleText() {
+        const styles = [];
+        if (this.state.foreground) styles.push(`color:${this.state.foreground}`);
+        if (this.state.background) styles.push(`background-color:${this.state.background}`);
+        if (this.state.bold) styles.push("font-weight:700");
+        if (this.state.italic) styles.push("font-style:italic");
+        if (this.state.underline) styles.push("text-decoration:underline");
+        return styles.join(";");
+    }
 }
 
-outputConsole.addEventListener("click", (e) => {
-    const link = e.target.closest(".error-link");
-    if (!link) return;
-    e.preventDefault();
-    goToLine(parseInt(link.dataset.line, 10));
-});
+const ANSI_COLORS = [
+    "#000000", "#cd3131", "#0dbc79", "#e5e510",
+    "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"
+];
+
+const ANSI_BRIGHT_COLORS = [
+    "#666666", "#f14c4c", "#23d18b", "#f5f543",
+    "#3b8eea", "#d670d6", "#29b8db", "#ffffff"
+];
+
+function ansi256Color(n) {
+    n = Math.max(0, Math.min(255, Number(n) || 0));
+    if (n < 8) return ANSI_COLORS[n];
+    if (n < 16) return ANSI_BRIGHT_COLORS[n - 8];
+    if (n >= 232) {
+        const v = 8 + (n - 232) * 10;
+        return `rgb(${v}, ${v}, ${v})`;
+    }
+    const index = n - 16;
+    const r = Math.floor(index / 36);
+    const g = Math.floor((index % 36) / 6);
+    const b = index % 6;
+    const level = [0, 95, 135, 175, 215, 255];
+    return `rgb(${level[r]}, ${level[g]}, ${level[b]})`;
+}
+
+function renderAnsiText(text) {
+    const renderer = new AnsiTerminalRenderer();
+    const frag = renderer.push(text || "");
+    const tail = renderer.finish();
+    frag.appendChild(tail);
+    return frag;
+}
+
+/*
+ * Render a traceback with ANSI styling while preserving the existing
+ * clickable "File \"main.py\", line N" behavior.
+ */
+function renderErrorText(text) {
+    const root = document.createDocumentFragment();
+    const styled = renderAnsiText(text || "");
+    const walker = document.createTreeWalker(styled, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+
+    const re = /(File "main\.py", )(line (\d+))/g;
+    let lastLine = null;
+
+    nodes.forEach((textNode) => {
+        const value = textNode.nodeValue || "";
+        re.lastIndex = 0;
+        if (!re.test(value)) return;
+        re.lastIndex = 0;
+
+        const replacement = document.createDocumentFragment();
+        let last = 0;
+        let m;
+        while ((m = re.exec(value)) !== null) {
+            if (m.index > last) replacement.appendChild(document.createTextNode(value.slice(last, m.index + m[1].length)));
+            else replacement.appendChild(document.createTextNode(m[1]));
+
+            const a = document.createElement("a");
+            a.href = "#";
+            a.className = "error-link";
+            a.textContent = m[2];
+            a.dataset.line = m[3];
+            a.title = "Go to this line";
+            replacement.appendChild(a);
+            last = m.index + m[0].length;
+            lastLine = parseInt(m[3], 10);
+        }
+        if (last < value.length) replacement.appendChild(document.createTextNode(value.slice(last)));
+        textNode.parentNode.replaceChild(replacement, textNode);
+    });
+
+    while (styled.firstChild) root.appendChild(styled.firstChild);
+    return { frag: root, lastLine };
+}
+
+/* Render terminal output safely; stdout and stderr use the same ANSI path. */
+function renderShellOutput(container, text) {
+    container.replaceChildren();
+    const renderer = new AnsiTerminalRenderer();
+    container.appendChild(renderer.push(text || ""));
+    container.appendChild(renderer.finish());
+    return renderer;
+}
+
 
 function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -1076,190 +1344,183 @@ function copyText(text) {
     return new Promise((resolve, reject) => {
         const ta = document.createElement("textarea");
         ta.value = text;
-        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
         document.body.appendChild(ta);
+        ta.focus();
         ta.select();
         let ok = false;
-        try { ok = document.execCommand("copy"); } catch (e) {}
+        try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
         document.body.removeChild(ta);
-        ok ? resolve() : reject();
+        if (ok) resolve();
+        else reject(new Error("Copy failed"));
     });
 }
 
-function flashLabel(btn, text) {
-    const original = btn.textContent;
-    btn.textContent = text;
-    setTimeout(() => btn.textContent = original, 1200);
+/* =========================================================
+   RUN / EXECUTE
+========================================================= */
+function setRunningUI(value) {
+    running = value;
+    runButton.disabled = value;
+    if (value) {
+        stopButton.classList.add("visible");
+        runButton.classList.add("hidden");
+    } else {
+        stopButton.classList.remove("visible");
+        runButton.classList.remove("hidden");
+    }
 }
 
-/* =========================================================
-   RUN / STOP
-========================================================= */
-async function runCode() {
+function showShellView() {
+    if (isMobile()) document.body.classList.add("shell-view");
+}
+
+function renderRunResult(data) {
+    outputConsole.replaceChildren();
+    showOutputButtons();
+
+    const outputText = stripInputPrompts(data.output || "");
+
+    if (outputText) {
+        renderShellOutput(outputConsole, outputText);
+    }
+
+    if (data.success) {
+        if (!outputText) {
+            const p = document.createElement("div");
+            p.className = "output-placeholder";
+            p.textContent = "Program finished with no output.";
+            outputConsole.appendChild(p);
+        }
+        setStatus("ready", "Finished");
+    } else {
+        const errDiv = document.createElement("div");
+        errDiv.className = "output-error";
+        const { frag, lastLine } = renderErrorText(data.error || "Program terminated with an error.");
+        errDiv.appendChild(frag);
+        outputConsole.appendChild(errDiv);
+        if (lastLine) {
+            errorLine = lastLine;
+            renderGutter();
+        }
+        setStatus("error", "Error");
+    }
+
+    outputConsole.scrollTop = outputConsole.scrollHeight;
+}
+
+async function executeCode() {
     if (running) return;
 
     const code = codeEditor.value;
     if (!code.trim()) {
-        outputConsole.innerHTML =
-            `<div class="output-error">Please enter some Python code.</div>`;
-        setStatus("error", "Error");
+        resetExecutionInputState();
+        outputConsole.replaceChildren();
+        const errDiv = document.createElement("div");
+        errDiv.className = "output-error";
+        errDiv.textContent = "Please enter some Python code first.";
+        outputConsole.appendChild(errDiv);
+        showOutputButtons();
+        setStatus("error", "No code");
         return;
     }
 
-    if (isMobile()) {
-        document.body.classList.add("shell-view");
-    } else {
-        if (layout.collapsed) setCollapsed(false);
-    }
+    const userInput = getUserInput();
 
-    if (hasInputFunction() && !inputMode) {
-        outputConsole.innerHTML =
-            `<div class="output-placeholder">Enter the required values above, then click Run again.</div>`;
-        startInputSequence();
-        setStatus("running", "Waiting for input");
-        return;
-    }
-
-    // If in input mode but haven't finished sequence, focus the active field
-    if (inputMode && currentPromptIndex < promptsList.length) {
-        const activeField = inputBody.querySelector(".input-field");
-        if (activeField) activeField.focus();
-        return;
-    }
-
-    await executeCode();
-}
-
-async function executeCode() {
     running = true;
-    errorLine = null;
-    renderGutter();
-    runButton.disabled = true;
-    runButton.classList.add("hidden");
-    stopButton.classList.add("visible");
-    setStatus("running", "Running...");
-
-    outputConsole.innerHTML =
-        `<div class="output-placeholder">Running your Python program...</div>`;
-    copyButton.classList.remove("visible");
-    clearOutputBtn.classList.remove("visible");
-
-    const userInput = inputMode ? getUserInput() : "";
-    const t0 = performance.now();
     abortCtrl = new AbortController();
+    setRunningUI(true);
+    setStatus("running", "Running...");
 
     try {
         const resp = await fetch("/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: codeEditor.value, input: userInput }),
-            signal: abortCtrl.signal,
+            body: JSON.stringify({ code: code, input: userInput }),
+            signal: abortCtrl.signal
         });
         const data = await resp.json();
-        const secs = ((performance.now() - t0) / 1000).toFixed(2);
-
-        outputConsole.innerHTML = "";
-
-        if (data.success) {
-            const out = stripInputPrompts(data.output || "");
-
-            if (out.trim().length === 0) {
-                outputConsole.innerHTML =
-                    `<div class="output-placeholder">Program finished successfully with no output.</div>`;
-            } else {
-                outputConsole.textContent = out;
-                showOutputButtons();
-            }
-            setStatus("ready", `Finished · ${secs}s`);
-            if (inputMode) inputStatus.textContent = "Completed";
-        } else {
-            const cleanOutput = stripInputPrompts(data.output);
-
-            if (cleanOutput) {
-                const block = document.createElement("div");
-                block.textContent = cleanOutput;
-                outputConsole.appendChild(block);
-            }
-
-            let errText = data.error || "Program error.";
-            if (/EOFError/.test(errText)) {
-                errText += "\n\nHint: the program asked for more input() values than were provided. " +
-                           "Make sure your code has the right number of input() calls and run again.";
-            }
-
-            const err = document.createElement("div");
-            err.className = "output-error";
-            err.style.marginTop = cleanOutput ? "10px" : "0";
-            const { frag, lastLine } = renderErrorText(errText);
-            err.appendChild(frag);
-            outputConsole.appendChild(err);
-
-            if (lastLine) { errorLine = lastLine; renderGutter(); }
-
-            setStatus("error", "Error");
-            showOutputButtons();
-        }
+        renderRunResult(data);
     } catch (err) {
-        if (err.name === "AbortError") {
-            outputConsole.innerHTML =
-                `<div class="output-placeholder">Execution cancelled.</div>`;
-            setStatus("ready", "Cancelled");
+        outputConsole.replaceChildren();
+        const errDiv = document.createElement("div");
+        errDiv.className = "output-error";
+        if (err && err.name === "AbortError") {
+            errDiv.textContent = "Execution stopped.";
+            setStatus("ready", "Stopped");
         } else {
-            outputConsole.innerHTML =
-                `<div class="output-error">Unable to connect to the Python server.</div>`;
-            setStatus("error", "Connection Error");
+            errDiv.textContent = "Could not reach the server. Please check your connection and try again.";
+            setStatus("error", "Network error");
         }
+        outputConsole.appendChild(errDiv);
+        showOutputButtons();
     } finally {
-        running = false;
+        setRunningUI(false);
         abortCtrl = null;
-        runButton.disabled = false;
-        runButton.classList.remove("hidden");
-        stopButton.classList.remove("visible");
+        inputMode = false;
     }
 }
 
-function stopRun() { if (abortCtrl) abortCtrl.abort(); }
+function startRun() {
+    if (running) return;
 
-headerBackBtn.addEventListener("click", () => {
-    document.body.classList.remove("shell-view");
-    if (!isCoarse) codeEditor.focus();
+    errorLine = null;
+    renderGutter();
+    resetExecutionInputState();
+    outputConsole.replaceChildren();
+    showShellView();
+
+    // If the program contains input() calls, collect them sequentially first.
+    if (startInputSequence()) {
+        setStatus("running", "Waiting for input");
+        return;
+    }
+
+    executeCode();
+}
+
+runButton.addEventListener("click", startRun);
+stopButton.addEventListener("click", () => {
+    if (abortCtrl) abortCtrl.abort();
 });
 
 /* =========================================================
-   CLEAR / RESET / COPY / DOWNLOAD
+   OUTPUT BUTTONS + ERROR LINKS
 ========================================================= */
-function hideInputs() {
-    inputMode = false;
-    lastPromptSig = "";
-    inputSection.classList.remove("visible");
-    inputBody.innerHTML = "";
-    inputStatus.textContent = "Waiting for input";
-}
+copyButton.addEventListener("click", () => {
+    copyText(outputConsole.innerText).then(() => {
+        const old = copyButton.textContent;
+        copyButton.textContent = "Copied";
+        setTimeout(() => { copyButton.textContent = old; }, 1200);
+    }).catch(() => {});
+});
 
-function clearCode() {
-    hideInputs();
-    resetOutput();
-    replaceAll("");
-    codeEditor.focus();
-}
+clearOutputBtn.addEventListener("click", resetOutput);
 
-function resetCode() {
-    hideInputs();
-    resetOutput();
-    replaceAll(DEFAULT_CODE);
-    if (!isCoarse) codeEditor.focus();
-}
+outputConsole.addEventListener("click", (e) => {
+    const link = e.target.closest(".error-link");
+    if (!link) return;
+    e.preventDefault();
+    const n = parseInt(link.dataset.line, 10);
+    if (n) goToLine(n);
+});
 
+/* =========================================================
+   EDITOR TOOLBAR BUTTONS
+========================================================= */
 copyCodeButton.addEventListener("click", () => {
-    copyText(codeEditor.value)
-        .then(() => flashLabel(copyCodeButton, "Copied!"))
-        .catch(() => flashLabel(copyCodeButton, "Failed"));
+    copyText(codeEditor.value).then(() => {
+        const old = copyCodeButton.textContent;
+        copyCodeButton.textContent = "Copied!";
+        setTimeout(() => { copyCodeButton.textContent = old; }, 1200);
+    }).catch(() => {});
 });
 
 downloadButton.addEventListener("click", () => {
     const blob = new Blob([codeEditor.value], { type: "text/x-python" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
     a.href = url;
     a.download = "main.py";
     document.body.appendChild(a);
@@ -1268,329 +1529,77 @@ downloadButton.addEventListener("click", () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
-/* PERSISTENCE */
+clearButton.addEventListener("click", () => {
+    resetExecutionInputState();
+    replaceAll("");
+    resetOutput();
+});
+
+resetButton.addEventListener("click", () => {
+    resetExecutionInputState();
+    replaceAll(DEFAULT_CODE);
+});
+
+/* =========================================================
+   MOBILE SHELL VIEW BACK BUTTON
+========================================================= */
+headerBackBtn.addEventListener("click", () => {
+    document.body.classList.remove("shell-view");
+});
+
+/* =========================================================
+   EDITOR EVENTS
+========================================================= */
+let saveTimer = null;
 function saveCode() {
-    try { localStorage.setItem(STORAGE_KEY, codeEditor.value); } catch (e) {}
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        try { localStorage.setItem(STORAGE_KEY, codeEditor.value); } catch (e) {}
+    }, 300);
 }
+
 function loadCode() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        codeEditor.value = (saved !== null && saved !== "") ? saved : DEFAULT_CODE;
-    } catch (e) {
-        codeEditor.value = DEFAULT_CODE;
-    }
+    let saved = null;
+    try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    codeEditor.value = (typeof saved === "string") ? saved : DEFAULT_CODE;
 }
 
-/* =========================================================
-   INDENTATION HELPERS
-========================================================= */
-function getCurrentLineInfo() {
-    const value  = codeEditor.value;
-    const cursor = codeEditor.selectionStart;
-    const lineStart  = value.lastIndexOf("\n", cursor - 1) + 1;
-    const lineEndIdx = value.indexOf("\n", cursor);
-    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
-    return { value, cursor, lineStart, lineEnd, line: value.substring(lineStart, lineEnd) };
-}
-
-function getIndentation(line) {
-    const m = line.match(/^[ \t]*/);
-    return m ? m[0] : "";
-}
-
-function isBlockStart(line) {
-    const t = line.trim();
-    if (!t) return false;
-    return /^(if|elif|else|for|while|def|class|try|except|finally|with|async\s+def|async\s+for|async\s+with)\b.*:\s*(#.*)?$/.test(t);
-}
-
-function findMatchingParentIndent(keyword, currentLineIndex) {
-    const lines = codeEditor.value.split("\n");
-    for (let i = currentLineIndex - 1; i >= 0; i--) {
-        const t = lines[i].trim();
-        if (!t) continue;
-        const indent = getIndentation(lines[i]);
-
-        if (keyword === "else" || keyword === "elif") {
-            if (/^(if|elif|for|while|try|with)\b.*:\s*(#.*)?$/.test(t)) return indent;
-        }
-        if (keyword === "except" || keyword === "finally") {
-            if (/^try\b.*:\s*(#.*)?$/.test(t)) return indent;
-        }
-    }
-    return null;
-}
-
-/* =========================================================
-   KEY HANDLERS
-========================================================= */
-
-/* Tab / Shift+Tab */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    e.preventDefault();
-
-    const value = codeEditor.value;
-    const s  = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-
-    if (s === en && !e.shiftKey) { edit(s, en, "    "); return; }
-
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    let blockEnd = en;
-    if (s === en) {
-        const i = value.indexOf("\n", s);
-        blockEnd = i === -1 ? value.length : i;
-    }
-
-    const block   = value.substring(lineStart, blockEnd);
-    const updated = e.shiftKey
-        ? block.replace(/^ {1,4}/gm, "")
-        : block.replace(/^(?=[^\n])/gm, "    ");
-    if (updated === block) return;
-
-    if (s === en) {
-        const cursor = Math.max(lineStart, s - (block.length - updated.length));
-        edit(lineStart, blockEnd, updated, cursor, cursor);
-    } else {
-        edit(lineStart, blockEnd, updated, lineStart, lineStart + updated.length);
-    }
-});
-
-/* Enter (smart indent) */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
-    e.preventDefault();
-
-    const info = getCurrentLineInfo();
-    const s  = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const beforeCursor = info.line.substring(0, s - info.lineStart);
-    const indent = getIndentation(beforeCursor);
-    const newIndent = isBlockStart(beforeCursor) ? indent + "    " : indent;
-
-    edit(s, en, "\n" + newIndent);
-});
-
-/* Backspace: remove indentation by 4, or delete an empty auto-closed pair */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Backspace" || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (codeEditor.selectionStart !== codeEditor.selectionEnd) return;
-
-    const cursor = codeEditor.selectionStart;
-    if (cursor <= 0) return;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
-    const beforeCursor = value.substring(lineStart, cursor);
-
-    if (/^ +$/.test(beforeCursor)) {
-        e.preventDefault();
-        const remove = beforeCursor.length % 4 === 0 ? 4 : beforeCursor.length % 4;
-        edit(cursor - remove, cursor, "");
-        return;
-    }
-
-    const left = value[cursor - 1], right = value[cursor];
-    if (PAIRS[left] && PAIRS[left] === right) {
-        e.preventDefault();
-        edit(cursor - 1, cursor + 1, "");
-    }
-});
-
-/* Auto-close brackets and quotes, with skip-over */
-const PAIRS   = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'" };
-const CLOSERS = new Set([")", "]", "}", '"', "'"]);
-
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
-
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const next = value[s] || "";
-    const prev = value[s - 1] || "";
-
-    // Typing a closing character that is already there: just move past it
-    if (s === en && CLOSERS.has(e.key) && next === e.key) {
-        e.preventDefault();
-        codeEditor.setSelectionRange(s + 1, s + 1);
-        refreshCursor();
-        return;
-    }
-
-    if (!PAIRS[e.key]) return;
-    const close = PAIRS[e.key];
-    const isQuote = e.key === '"' || e.key === "'";
-
-    // Wrap a selection
-    if (s !== en) {
-        e.preventDefault();
-        edit(s, en, e.key + value.substring(s, en) + close, s + 1, en + 1);
-        return;
-    }
-
-    // Don't pair apostrophes inside words (don't, it's) or before text
-    if (isQuote && (/\w/.test(prev) || /\w/.test(next))) return;
-    if (!isQuote && next && !/[\s)\]};,:]/.test(next)) return;
-
-    e.preventDefault();
-    edit(s, s, e.key + close, s + 1, s + 1);
-});
-
-/* else / elif / except / finally auto-align */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== ":") return;
-
-    const info = getCurrentLineInfo();
-    const beforeCursor = info.line.substring(0, info.cursor - info.lineStart);
-    const m = beforeCursor.match(/^([ \t]*)(else|elif|except|finally)\b(.*)$/);
-    if (!m) return;
-
-    const lineIndex = value_lineIndex(info.lineStart);
-    const parentIndent = findMatchingParentIndent(m[2], lineIndex);
-    if (parentIndent === null) return;
-
-    e.preventDefault();
-    edit(info.lineStart, codeEditor.selectionEnd,
-         parentIndent + beforeCursor.substring(m[1].length) + ":");
-});
-function value_lineIndex(lineStart) {
-    return codeEditor.value.substring(0, lineStart).split("\n").length - 1;
-}
-
-/* Ctrl+/ : toggle comments */
-codeEditor.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || (e.key !== "/" && e.key !== "Divide")) return;
-    e.preventDefault();
-
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    const block = value.substring(lineStart, en);
-    const allCommented = block.split("\n").every(l => /^\s*#/.test(l) || l.trim() === "");
-    const updated = allCommented
-        ? block.replace(/^(\s*)# ?/gm, "$1")
-        : block.replace(/^(\s*)/gm, "$1# ");
-
-    if (s === en) {
-        const cursor = Math.max(lineStart, s + (updated.length - block.length));
-        edit(lineStart, en, updated, cursor, cursor);
-    } else {
-        edit(lineStart, en, updated, lineStart, lineStart + updated.length);
-    }
-});
-
-/* Ctrl+D : duplicate line */
-codeEditor.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || (e.key !== "d" && e.key !== "D")) return;
-    e.preventDefault();
-    const info = getCurrentLineInfo();
-    edit(info.lineEnd, info.lineEnd, "\n" + info.value.substring(info.lineStart, info.lineEnd));
-});
-
-/* Smart Home */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Home" || e.shiftKey) return;
-    const info = getCurrentLineInfo();
-    const target = info.lineStart + info.line.match(/^[ \t]*/)[0].length;
-    const cursor = codeEditor.selectionStart;
-    if (cursor !== target && cursor !== info.lineStart) {
-        e.preventDefault();
-        codeEditor.setSelectionRange(target, target);
-        refreshCursor();
-    }
-});
-
-/* Ctrl+Enter : run */
-codeEditor.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        runCode();
-    }
-});
-
-/* Ctrl+S : save */
-window.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
-        e.preventDefault();
-        saveCode();
-    }
-});
-
-/* Paste: normalise line endings, turn tabs into 4 spaces, re-indent on blank indented lines */
-codeEditor.addEventListener("paste", (e) => {
-    let text = (e.clipboardData || window.clipboardData).getData("text");
-    if (!text) return;
-    e.preventDefault();
-
-    text = text.replace(/\r\n?/g, "\n").replace(/\t/g, "    ");
-
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    const beforeOnLine = value.substring(lineStart, s);
-
-    let inserted = text;
-    const lines = text.split("\n");
-    if (lines.length > 1 && beforeOnLine.length > 0 && beforeOnLine.trim() === "") {
-        inserted = lines.map((l, i) => i === 0 ? l : beforeOnLine + l).join("\n");
-    }
-    edit(s, en, inserted);
-});
-
-/* INPUT / SCROLL / CURSOR EVENTS */
 codeEditor.addEventListener("input", () => {
-    errorLine = null;
-    if (inputMode) syncInputRows();
+    updateLineNumbers();
+    syncInputRows();
     saveCode();
-    updateHighlight();
-    renderGutter();
-    updateCursor();
 });
 
-codeEditor.addEventListener("click",  refreshCursor);
-codeEditor.addEventListener("keyup",  refreshCursor);
-codeEditor.addEventListener("select", refreshCursor);
 codeEditor.addEventListener("scroll", syncScroll);
+codeEditor.addEventListener("click", refreshCursor);
+codeEditor.addEventListener("keyup", refreshCursor);
 
-/* OUTPUT BUTTONS */
-copyButton.addEventListener("click", () => {
-    copyText(outputConsole.innerText)
-        .then(() => flashLabel(copyButton, "Copied!"))
-        .catch(() => flashLabel(copyButton, "Failed"));
+codeEditor.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        startRun();
+        return;
+    }
+    if (e.key === "Tab") {
+        e.preventDefault();
+        const s  = codeEditor.selectionStart;
+        const en = codeEditor.selectionEnd;
+        edit(s, en, "    ");
+    }
 });
-clearOutputBtn.addEventListener("click", resetOutput);
 
-/* BUTTONS */
-runButton.addEventListener("click", runCode);
-stopButton.addEventListener("click", stopRun);
-clearButton.addEventListener("click", clearCode);
-resetButton.addEventListener("click", resetCode);
+window.addEventListener("beforeunload", () => {
+    try { localStorage.setItem(STORAGE_KEY, codeEditor.value); } catch (e) {}
+});
 
 /* =========================================================
-   PHONE LAYOUT: Run / Stop become a round button over the editor
+   INIT
 ========================================================= */
-const phoneQuery    = window.matchMedia("(max-width: 600px)");
-const runControls   = document.getElementById("runControls");
-const headerRight   = document.querySelector(".header-right");
-const editorSection = document.getElementById("editorSection");
-
-function placeRunControls() {
-    const target = phoneQuery.matches ? editorSection : headerRight;
-    if (runControls.parentElement !== target) target.appendChild(runControls);
-}
-if (phoneQuery.addEventListener) phoneQuery.addEventListener("change", placeRunControls);
-
-/* INIT */
-placeRunControls();
 loadCode();
 applyFont();
 updateLineNumbers();
 applyLayout();
-window.addEventListener("beforeunload", saveCode);
+setStatus("ready", "Ready");
 </script>
-
 </body>
 </html>
