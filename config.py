@@ -38,3 +38,26 @@ RATE_LIMIT_WINDOW   = _int("RATE_LIMIT_WINDOW", 60)   # ... per this many second
 # Optional password for the whole site (leave empty to disable)
 BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "")
+
+# ------------------------------------------------------------
+#  Runtime package manager (pip) - NEW
+#  Lets students install/uninstall libraries from the built-in
+#  Packages terminal. Installs are stored under the OS temp dir
+#  and last for the lifetime of the server process (ephemeral
+#  on Render). Permanent dependencies belong in requirements.txt.
+#
+#  Set ENABLE_PACKAGES=false to hide/disable this feature, and
+#  PACKAGES_ALLOWLIST="requests,numpy,pandas" to restrict which
+#  packages may be installed (comma or space separated).
+#  PIP_INDEX_URL can point at a mirror.
+# ------------------------------------------------------------
+ENABLE_PACKAGES  = os.environ.get("ENABLE_PACKAGES", "true").lower() == "true"
+PIP_TIMEOUT      = _int("PIP_TIMEOUT", 120)         # seconds per pip install
+PIP_INDEX_URL    = os.environ.get("PIP_INDEX_URL", "")
+PKG_RATE_MAX     = _int("PKG_RATE_MAX", 12)         # package operations per IP ...
+PKG_RATE_WINDOW  = _int("PKG_RATE_WINDOW", 300)     # ... per this many seconds
+ALLOWED_PACKAGES = [
+    p
+    for p in os.environ.get("PACKAGES_ALLOWLIST", "").replace(",", " ").split()
+    if p
+]
