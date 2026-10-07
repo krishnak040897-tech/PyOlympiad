@@ -22,11 +22,24 @@
     --error: #dc2626;
     --editor-background: #ffffff;
     --console-background: #fbfbfc;
+    --surface: #ffffff;
     --header-height: 58px;
     --panel-header: 43px;
     --splitter: 10px;
     --code-font: 14px;
     --code-lh: 22px;
+
+    /* Terminal palette */
+    --term-bg: #0d1117;
+    --term-bar: #161b22;
+    --term-line: #21262d;
+    --term-line-2: #30363d;
+    --term-text: #c9d1d9;
+    --term-bright: #e6edf3;
+    --term-dim: #8b949e;
+    --term-green: #3fb950;
+    --term-blue: #58a6ff;
+    --term-red: #f85149;
 }
 
 html, body { height: 100%; }
@@ -204,10 +217,12 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 
 .editor-menu { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); flex-shrink: 0; z-index: 20; }
 .menu-button { min-width: 38px; padding: 0 9px; font-size: 17px; line-height: 1; }
+
+/* Flat bordered dropdown (no box-shadow anywhere on the page) */
 .editor-menu-panel {
     display: none; position: absolute; top: calc(100% + 7px); right: 0; z-index: 1000;
     width: 190px; padding: 6px; background: #fff; border: 1px solid var(--border);
-    border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.14);
+    border-radius: 9px;
 }
 .editor-menu-panel.open { display: block; }
 .menu-item {
@@ -225,6 +240,93 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .font-buttons { display: flex; gap: 4px; }
 .font-buttons .tool-button { width: 30px; padding: 0; font-weight: 600; }
 .lbl-short { display: none; }
+
+/* Submenu trigger row: label + chevron, highlights while open */
+.menu-item-with-sub {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.menu-chev { color: #9ca3af; font-size: 14px; line-height: 1; flex-shrink: 0; }
+.menu-item.submenu-open { background: #f3f4f6; }
+.menu-item.submenu-open .menu-chev { color: #374151; }
+
+/* =========================================================
+   INSTALLED LIBRARIES — simple panel
+   - Opens ONLY when the "Installed Libraries" item is clicked
+     (never on hover)
+   - Same look as the dropdown: white, thin border, plain rows
+   - Closes on: outside click, Esc, menu close, or clicking
+     the item again
+   ========================================================= */
+.lib-flyout {
+    display: none;
+    position: absolute;
+    top: -7px;
+    right: calc(100% + 8px);
+    width: 210px;
+    max-width: calc(100vw - 36px);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 6px;
+    flex-direction: column;
+    text-align: left;
+}
+.lib-flyout.open { display: flex; }
+
+.lib-flyout-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 5px 10px 4px;
+}
+.lib-flyout-title { font-size: 11px; color: #9ca3af; white-space: nowrap; }
+.lib-flyout-count { font-size: 11px; color: #9ca3af; white-space: nowrap; }
+
+.lib-flyout-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+}
+.lib-flyout-list::-webkit-scrollbar { width: 6px; }
+.lib-flyout-list::-webkit-scrollbar-track { background: transparent; }
+.lib-flyout-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+
+/* Each library = one plain row, same size/feel as .menu-item */
+.lib-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 12px; color: #374151;
+}
+.lib-row:hover { background: #f3f4f6; }
+.lib-name {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lib-ver { flex-shrink: 0; font-size: 11px; color: #9ca3af; }
+.lib-remove {
+    flex-shrink: 0;
+    width: 20px; height: 20px; border: 0; border-radius: 5px;
+    background: transparent; color: #9ca3af;
+    font-size: 14px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.lib-remove:hover { background: #fef2f2; color: #dc2626; }
+.lib-remove:disabled { opacity: .5; cursor: not-allowed; }
+.lib-empty { padding: 12px 10px; color: #9ca3af; font-size: 12px; }
+
+/* Footer row behaves like a normal menu item */
+.lib-flyout-footer {
+    width: 100%; border: 0; border-radius: 6px; background: transparent;
+    padding: 9px 10px; text-align: left;
+    font: inherit; font-size: 12px; color: #374151; cursor: pointer;
+}
+.lib-flyout-footer:hover { background: #f3f4f6; }
+
+/* Narrow screens: drop the panel BELOW the dropdown instead of beside it */
+@media (max-width: 520px) {
+    .lib-flyout { top: calc(100% + 8px); right: 0; }
+    .lib-flyout-list { max-height: 150px; }
+}
 
 .editor-container { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 .editor {
@@ -282,7 +384,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 #codeEditor::selection { background: rgba(16, 163, 127, 0.22); }
 #codeEditor::placeholder { color: #b4b8bd; }
 
-/* Editor helpers */
+/* Flat bordered find bar (no box-shadow) */
 .editor-search {
     display: none;
     position: absolute;
@@ -295,7 +397,6 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     background: #fff;
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 5px 18px rgba(0,0,0,.12);
 }
 .editor-search.open { display: flex; }
 .editor-search input {
@@ -304,7 +405,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     outline: none; padding: 0 8px;
     font: 12px Inter, Arial, sans-serif; color: #202124;
 }
-.editor-search input:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgba(16,163,127,.10); }
+.editor-search input:focus { border-color: var(--green); }
 .editor-search button {
     width: 28px; height: 28px; border: 1px solid var(--border);
     border-radius: 5px; background: #fff; color: #6b7280; cursor: pointer;
@@ -367,6 +468,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     background: var(--console-background);
     display: flex; flex-direction: column;
     overflow: hidden;
+    position: relative;   /* anchors the package terminal layer */
 }
 
 .input-section {
@@ -395,7 +497,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 }
 .input-history-value {
     font-family: Consolas, "Courier New", monospace;
-    font-size: 12px; color: #0a7d5a; /* matches string color */
+    font-size: 12px; color: #0a7d5a;
     flex: 1; min-width: 80px; height: 32px;
     display: flex; align-items: center; padding: 0 9px;
 }
@@ -407,8 +509,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     font-size: 12px; color: #202124; background: white;
 }
 .input-field:focus {
-    border-color: var(--green);
-    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.10);
+    border-color: var(--green);   /* flat focus, no shadow */
 }
 
 .output-section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -444,19 +545,133 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 .error-link { color: #b91c1c; text-decoration: underline; cursor: pointer; font-weight: 600; }
 .error-link:hover { color: #7f1d1d; }
 
+/* =========================================================
+   PACKAGE TERMINAL  (desktop-style, replaces the whole shell)
+   ========================================================= */
+.pkg-layer {
+    position: absolute; inset: 0; z-index: 40;
+    display: none;
+    background: var(--term-bg);
+    font-family: Consolas, "Courier New", monospace;
+}
+.pkg-layer.open { display: flex; flex-direction: column; }
+
+/* --- Window title bar (desktop chrome) --- */
+.pkg-titlebar {
+    height: 40px; flex-shrink: 0;
+    background: var(--term-bar);
+    border-bottom: 1px solid var(--term-line);
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px 0 14px;
+    -webkit-user-select: none; user-select: none;
+}
+.pkg-dots { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.pkg-dots .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block; cursor: pointer;
+}
+.dot-red    { background: #ff5f57; }
+.dot-yellow { background: #febc2e; }
+.dot-green  { background: #28c840; }
+.pkg-title {
+    flex: 1; min-width: 0;
+    text-align: center;
+    font-size: 12px; color: var(--term-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pkg-exit {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border: 0; border-radius: 6px;
+    background: transparent;
+    color: var(--term-dim);
+    font-size: 15px; line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+}
+.pkg-exit:hover { background: var(--term-line-2); color: var(--term-bright); }
+
+/* --- Terminal screen (scrollback) --- */
+.pkg-screen {
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    padding: 12px 14px;
+    font-size: 12.5px; line-height: 19px;
+    color: var(--term-text);
+    white-space: pre-wrap; word-break: break-word;
+    font-variant-ligatures: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--term-line-2) transparent;
+}
+.pkg-screen::-webkit-scrollbar { width: 10px; }
+.pkg-screen::-webkit-scrollbar-track { background: transparent; }
+.pkg-screen::-webkit-scrollbar-thumb {
+    background: var(--term-line-2); border-radius: 6px;
+    border: 2px solid var(--term-bg);
+}
+.pkg-screen .t-cmd { color: var(--term-bright); }
+.pkg-screen .t-err { color: var(--term-red); }
+.pkg-screen .t-dim { color: var(--term-dim); }
+.pkg-screen .t-ok  { color: var(--term-green); }
+.pkg-screen .p-user { color: var(--term-green); font-weight: 700; }
+.pkg-screen .p-path { color: var(--term-blue); }
+
+/* --- Command entry row --- */
+.pkg-entry {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 8px;
+    border-top: 1px solid var(--term-line);
+    padding: 10px 12px;
+    background: var(--term-bg);
+}
+.pkg-prompt {
+    flex-shrink: 0;
+    font-size: 12px; font-weight: 700;
+    color: var(--term-green);
+    white-space: nowrap;
+}
+.pkg-prompt .p-path { color: var(--term-blue); font-weight: 500; }
+.pkg-prompt .p-dollar { color: var(--term-text); font-weight: 500; }
+.pkg-input {
+    flex: 1; min-width: 0; height: 30px;
+    background: transparent;
+    border: none; outline: none;
+    padding: 0 2px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--term-bright);
+    caret-color: var(--term-green);
+}
+.pkg-input::placeholder { color: #484f58; }
+.pkg-send {
+    flex-shrink: 0;
+    width: 34px; height: 30px;
+    border: 1px solid var(--term-line-2); border-radius: 6px;
+    background: var(--term-bar);
+    color: var(--term-green);
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+    font-family: inherit;
+}
+.pkg-send:hover { background: var(--term-line); border-color: var(--term-green); }
+.pkg-send:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ================= TABLET / MOBILE: DEDICATED SHELL SCREEN ================= */
 @media (max-width: 850px) {
     .workspace { flex-direction: column; }
     .editor-section { width: 100%; flex: 1 1 0; min-height: 0; display: flex; }
     .splitter { display: none; }
     .right-section { display: none; width: 100%; flex: 1 1 0; background: var(--console-background); }
-    
+
     /* Activate Shell View */
     body.shell-view .header-back-button { display: flex; }
     body.shell-view .editor-section { display: none; }
     body.shell-view .right-section { display: flex; flex-direction: column; }
-    body.shell-view .run-controls { display: none; } 
-    
+    body.shell-view .run-controls { display: none; }
+
     .input-section.visible { max-height: 40%; flex-shrink: 0; }
     .input-body { max-height: 28vh; }
     .output-section { flex: 1 1 0; min-height: 0; }
@@ -478,9 +693,12 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     .lbl-full { display: none; }
     .lbl-short { display: inline; }
     .line-numbers { width: 40px; padding-right: 8px; padding-bottom: 96px; }
-    #highlightLayer, #codeEditor { padding: 14px 10px 96px; }   /* room so the last lines scroll above the round button */
+    #highlightLayer, #codeEditor { padding: 14px 10px 96px; }
 
-    /* Round floating Run / Stop button (bottom-right of the editor) */
+    /* Round floating Run / Stop button (bottom-right of the editor).
+       NOTE: #runControls is moved into .editor-section by JavaScript
+       on small screens so this absolute position anchors correctly.
+       Flat buttons — no shadows. */
     .editor-section { position: relative; }
     .run-controls {
         position: absolute; right: 16px; bottom: 46px; z-index: 20;
@@ -488,17 +706,19 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     .run-button, .stop-button {
         width: 58px; height: 58px; padding: 0;
         border-radius: 50%;
-        box-shadow: 0 6px 16px rgba(16, 163, 127, 0.45), 0 2px 5px rgba(0, 0, 0, 0.18);
     }
-    .stop-button { box-shadow: 0 6px 16px rgba(239, 68, 68, 0.45), 0 2px 5px rgba(0, 0, 0, 0.18); }
     .run-button #runButtonText, .stop-button .run-label { display: none; }
     .run-icon { font-size: 22px; }
-    .run-button .run-icon { padding-left: 3px; }   /* optical centring of the triangle */
+    .run-button .run-icon { padding-left: 3px; }
     .run-button:active, .stop-button:active { transform: scale(0.93); }
     .right-section { padding-bottom: env(safe-area-inset-bottom, 0px); }
     .editor-status .hide-sm { display: none; }
     .output-console { padding: 12px; }
     .output-status #statusText { display: none; }
+
+    /* Terminal takes the full shell height, keep title bar compact */
+    .pkg-titlebar { height: 36px; padding: 0 8px 0 12px; }
+    .pkg-title { font-size: 11px; }
 }
 @media (max-width: 380px) {
     .brand-name { font-size: 14px; }
@@ -510,6 +730,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 @media (max-height: 480px) and (max-width: 850px) {
     :root { --header-height: 46px; --panel-header: 36px; }
     .editor-status { display: none; }
+    .pkg-titlebar { height: 32px; }
 }
 
 /* ================= TOUCH DEVICES ================= */
@@ -518,6 +739,10 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
     .input-history-value { font-size: 16px; height: 38px; }
     .tool-button, .small-button { height: 34px; }
     :root { --splitter: 14px; }
+    .pkg-input { font-size: 16px; height: 36px; }
+    .pkg-send { width: 40px; height: 36px; }
+    .pkg-exit { width: 30px; height: 30px; }
+    .lib-remove { width: 28px; height: 28px; }
 }
 
 @media (max-width: 600px) and (max-height: 480px) {
@@ -571,6 +796,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
                 <button class="tool-button" id="saveAsButton" title="Save Python program" aria-label="Save As">Save As</button>
                 <button class="tool-button" id="undoButton" title="Undo (Ctrl+Z)" aria-label="Undo">Undo</button>
                 <button class="tool-button" id="redoButton" title="Redo (Ctrl+Y)" aria-label="Redo">Redo</button>
+                <button class="tool-button" id="findButton" title="Find in code (Ctrl+F)" aria-label="Find in code">Find</button>
 
                 <!-- Existing controls are kept for compatibility with the editor logic. -->
                 <button class="tool-button hidden-control" id="fontDown" title="Smaller text" aria-label="Decrease font size">A−</button>
@@ -589,10 +815,27 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
                     <button class="menu-item" id="menuClearButton" type="button" role="menuitem">Clear editor</button>
                     <button class="menu-item menu-reset" id="menuResetButton" type="button" role="menuitem">Reset to starter code</button>
                     <div class="menu-divider"></div>
+                    <!-- Submenu trigger: opens the library list ONLY on click. -->
+                    <button class="menu-item menu-item-with-sub" id="menuLibrariesButton" type="button" role="menuitem" aria-haspopup="true" aria-expanded="false">
+                        <span>Installed Libraries</span>
+                        <span class="menu-chev" aria-hidden="true">›</span>
+                    </button>
+                    <div class="menu-divider"></div>
                     <div class="menu-label">Text size</div>
                     <div class="menu-font-buttons">
                         <button class="menu-item menu-font" id="menuFontDown" type="button" role="menuitem">A− &nbsp; Smaller</button>
                         <button class="menu-item menu-font" id="menuFontUp" type="button" role="menuitem">A+ &nbsp; Larger</button>
+                    </div>
+
+                    <!-- Installed Libraries — simple list panel (click to open) -->
+                    <div class="lib-flyout" id="libFlyout" role="region" aria-label="Installed libraries">
+                        <div class="lib-flyout-head">
+                            <span class="lib-flyout-title">Installed libraries</span>
+                            <span class="lib-flyout-count" id="libFlyoutCount"></span>
+                        </div>
+                        <div class="lib-flyout-list" id="libFlyoutList"></div>
+                        <div class="menu-divider"></div>
+                        <button class="lib-flyout-footer" id="libFlyoutOpenTerminal" type="button">Open package terminal</button>
                     </div>
                 </div>
             </div>
@@ -659,6 +902,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
             <div class="output-header">
                 <span class="output-title">Shell Output</span>
                 <div class="output-actions">
+                    <button class="small-button visible" id="packagesButton" title="Install / remove Python libraries" aria-label="Manage Python packages">Packages</button>
                     <button class="small-button" id="copyButton">Copy</button>
                     <button class="small-button" id="clearOutputButton">Clear</button>
                     <span class="output-status">
@@ -673,6 +917,28 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
                 </div>
             </div>
         </div>
+
+        <!-- PACKAGE TERMINAL — replaces the entire shell panel while open. -->
+        <div class="pkg-layer" id="pkgLayer" role="dialog" aria-label="Package terminal">
+            <div class="pkg-titlebar">
+                <div class="pkg-dots" aria-hidden="true">
+                    <span class="dot dot-red" id="pkgDotClose" title="Close terminal"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                </div>
+                <div class="pkg-title">student@pyolympiad: ~/packages — pip</div>
+                <button class="pkg-exit" id="pkgExit" type="button" aria-label="Exit package terminal" title="Exit (Esc)">×</button>
+            </div>
+
+            <div class="pkg-screen" id="pkgTerminal" role="log" aria-live="polite"></div>
+
+            <form class="pkg-entry" id="pkgForm" autocomplete="off">
+                <span class="pkg-prompt" aria-hidden="true">student@pyolympiad:<span class="p-path">~</span><span class="p-dollar">$</span></span>
+                <input class="pkg-input" id="pkgInput" type="text" spellcheck="false"
+                       placeholder="install requests   ·   type help" aria-label="Package command">
+                <button class="pkg-send" id="pkgRun" type="submit" title="Run command" aria-label="Run command">⏎</button>
+            </form>
+        </div>
     </section>
 
 </main>
@@ -684,6 +950,7 @@ button:focus-visible, .splitter:focus-visible, .error-link:focus-visible {
 /* ELEMENTS */
 const root            = document.documentElement;
 const workspace       = document.getElementById("workspace");
+const editorSection   = document.getElementById("editorSection");
 const rightSection    = document.getElementById("rightSection");
 const splitter        = document.getElementById("splitter");
 const codeEditor      = document.getElementById("codeEditor");
@@ -692,6 +959,8 @@ const highlightCode   = document.getElementById("highlightCode");
 const lineNumbers     = document.getElementById("lineNumbers");
 const runButton       = document.getElementById("runButton");
 const stopButton      = document.getElementById("stopButton");
+const runControls     = document.getElementById("runControls");
+const headerRight     = document.querySelector(".header-right");
 const clearButton     = document.getElementById("clearButton");
 const resetButton     = document.getElementById("resetButton");
 const fontDown        = document.getElementById("fontDown");
@@ -703,6 +972,7 @@ const undoButton      = document.getElementById("undoButton");
 const redoButton      = document.getElementById("redoButton");
 const openFileInput   = document.getElementById("openFileInput");
 const copyCodeButton  = document.getElementById("copyCodeButton");
+const findButton      = document.getElementById("findButton");
 const menuButton      = document.getElementById("menuButton");
 const editorMenuPanel = document.getElementById("editorMenuPanel");
 const menuRenameButton = document.getElementById("menuRenameButton");
@@ -711,6 +981,7 @@ const menuClearButton  = document.getElementById("menuClearButton");
 const menuResetButton  = document.getElementById("menuResetButton");
 const menuFontDown     = document.getElementById("menuFontDown");
 const menuFontUp       = document.getElementById("menuFontUp");
+const fileTabs        = document.getElementById("fileTabs");
 const fileNameDisplay = document.querySelector(".file-name");
 const inputSection    = document.getElementById("inputSection");
 const inputBody       = document.getElementById("inputBody");
@@ -730,13 +1001,32 @@ const searchPrev      = document.getElementById("searchPrev");
 const searchNext      = document.getElementById("searchNext");
 const searchClose     = document.getElementById("searchClose");
 
+/* Package terminal elements */
+const packagesButton  = document.getElementById("packagesButton");
+const pkgLayer        = document.getElementById("pkgLayer");
+const pkgExit         = document.getElementById("pkgExit");
+const pkgDotClose     = document.getElementById("pkgDotClose");
+const pkgTerminal     = document.getElementById("pkgTerminal");
+const pkgForm         = document.getElementById("pkgForm");
+const pkgInput        = document.getElementById("pkgInput");
+const pkgRun          = document.getElementById("pkgRun");
+
+/* Installed Libraries submenu elements */
+const menuLibrariesButton = document.getElementById("menuLibrariesButton");
+const libFlyout           = document.getElementById("libFlyout");
+const libFlyoutCount      = document.getElementById("libFlyoutCount");
+const libFlyoutList       = document.getElementById("libFlyoutList");
+const libFlyoutOpenTerminal = document.getElementById("libFlyoutOpenTerminal");
+
 const DEFAULT_CODE =
 `name = input("Enter your name: ")
 print("Hello", name)`;
 
 const STORAGE_KEY = "python_editor_code_v1";
+const FILES_KEY   = "python_editor_files_v2";
 const LAYOUT_KEY  = "python_editor_layout_v1";
 const FONT_KEY    = "python_editor_font_v1";
+const MAX_FILES   = 12;
 const EMPTY_OUTPUT_HTML =
     `<div class="output-placeholder">Click Run to execute your Python program.</div>`;
 
@@ -755,6 +1045,264 @@ let promptsList = [];
 let collectedInputs = [];
 let currentPromptIndex = 0;
 let lastPromptSig = "";
+
+/* Multi-file state */
+let files = [];
+let activeFileIndex = 0;
+
+/* =========================================================
+   ANSI PALETTE (light-background friendly)
+========================================================= */
+const ANSI_BASE = [
+    "#111827", "#b91c1c", "#15803d", "#a16207",
+    "#1d4ed8", "#7e22ce", "#0e7490", "#9ca3af",
+];
+const ANSI_BRIGHT = [
+    "#374151", "#dc2626", "#16a34a", "#d97706",
+    "#2563eb", "#9333ea", "#0891b2", "#e5e7eb",
+];
+const ANSI_CUBE = [0, 95, 135, 175, 215, 255];
+
+function rgbToHex(r, g, b) {
+    const c = (v) => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, "0");
+    return "#" + c(r) + c(g) + c(b);
+}
+
+function ansi256ToHex(n) {
+    if (!Number.isFinite(n)) return null;
+    n = Math.max(0, Math.min(255, n | 0));
+    if (n < 16)  return n < 8 ? ANSI_BASE[n] : ANSI_BRIGHT[n - 8];
+    if (n < 232) {
+        const i = n - 16;
+        return rgbToHex(
+            ANSI_CUBE[Math.floor(i / 36)],
+            ANSI_CUBE[Math.floor((i % 36) / 6)],
+            ANSI_CUBE[i % 6]
+        );
+    }
+    const g = 8 + (n - 232) * 10;
+    return rgbToHex(g, g, g);
+}
+
+/* =========================================================
+   STATUS / OUTPUT
+========================================================= */
+function setStatus(type, message) {
+    statusDot.className = "status-dot";
+    if (type === "ready")        statusDot.classList.add("ready");
+    else if (type === "running") statusDot.classList.add("running");
+    else if (type === "error")   statusDot.classList.add("error");
+    statusText.textContent = message;
+}
+
+function resetOutput() {
+    outputConsole.innerHTML = EMPTY_OUTPUT_HTML;
+    copyButton.classList.remove("visible");
+    clearOutputBtn.classList.remove("visible");
+    setStatus("ready", "Ready");
+}
+
+function showOutputButtons() {
+    copyButton.classList.add("visible");
+    clearOutputBtn.classList.add("visible");
+}
+
+/*
+ * ANSI / SGR terminal renderer.
+ *
+ * The parser is deliberately stateful: push() may receive an arbitrary
+ * chunk and keeps an incomplete ESC[... sequence until the next chunk.
+ * Normal output is ALWAYS inserted with createTextNode/textContent,
+ * so stdout/stderr cannot inject HTML into the Shell Output.
+ */
+class AnsiTerminalRenderer {
+    constructor() {
+        this.buffer = "";
+        this.state = {
+            bold: false,
+            italic: false,
+            underline: false,
+            dim: false,
+            foreground: null,
+            background: null,
+        };
+    }
+
+    push(chunk) {
+        if (chunk === null || chunk === undefined) return document.createDocumentFragment();
+        this.buffer += String(chunk);
+        return this._parse(false);
+    }
+
+    finish() {
+        return this._parse(true);
+    }
+
+    _parse(flush) {
+        const frag = document.createDocumentFragment();
+        let text = "";
+
+        const emitText = () => {
+            if (!text) return;
+            if (this._hasStyle()) {
+                const span = document.createElement("span");
+                span.style.cssText = this._styleText();
+                span.textContent = text;
+                frag.appendChild(span);
+            } else {
+                frag.appendChild(document.createTextNode(text));
+            }
+            text = "";
+        };
+
+        const source = this.buffer;
+        let i = 0;
+
+        while (i < source.length) {
+            const ch = source[i];
+
+            if (ch !== "\x1b") {
+                text += ch;
+                i++;
+                continue;
+            }
+
+            if (i + 1 >= source.length) {
+                if (!flush) break;
+                i++;
+                continue;
+            }
+
+            if (source[i + 1] !== "[") {
+                i++;
+                continue;
+            }
+
+            let j = i + 2;
+            while (j < source.length && !(source.charCodeAt(j) >= 0x40 && source.charCodeAt(j) <= 0x7e)) {
+                j++;
+            }
+
+            if (j >= source.length) {
+                if (!flush) break;
+                i = source.length;
+                continue;
+            }
+
+            const finalByte = source[j];
+            const paramsText = source.slice(i + 2, j);
+            emitText();
+
+            if (finalByte === "m") {
+                this._applySgr(paramsText);
+            }
+
+            i = j + 1;
+        }
+
+        if (flush || i > 0) {
+            this.buffer = source.slice(i);
+        }
+        emitText();
+        return frag;
+    }
+
+    _applySgr(paramsText) {
+        let params;
+        if (paramsText === "" || paramsText === ";") {
+            params = [0];
+        } else {
+            params = paramsText.split(";").map((v) => {
+                const n = parseInt(v, 10);
+                return Number.isFinite(n) ? n : 0;
+            });
+        }
+
+        let i = 0;
+        while (i < params.length) {
+            const p = params[i];
+
+            if (p === 0) {
+                this.state.bold = false;
+                this.state.italic = false;
+                this.state.underline = false;
+                this.state.dim = false;
+                this.state.foreground = null;
+                this.state.background = null;
+            } else if (p === 1) {
+                this.state.bold = true;
+            } else if (p === 2) {
+                this.state.dim = true;
+            } else if (p === 3) {
+                this.state.italic = true;
+            } else if (p === 4) {
+                this.state.underline = true;
+            } else if (p === 22) {
+                this.state.bold = false;
+                this.state.dim = false;
+            } else if (p === 23) {
+                this.state.italic = false;
+            } else if (p === 24) {
+                this.state.underline = false;
+            } else if (p >= 30 && p <= 37) {
+                this.state.foreground = ANSI_BASE[p - 30];
+            } else if (p === 38 || p === 48) {
+                const ext = this._extendedColor(params, i);
+                if (ext) {
+                    if (p === 38) this.state.foreground = ext.color;
+                    else          this.state.background = ext.color;
+                    i += ext.skip;
+                }
+            } else if (p === 39) {
+                this.state.foreground = null;
+            } else if (p >= 40 && p <= 47) {
+                this.state.background = ANSI_BASE[p - 40];
+            } else if (p === 49) {
+                this.state.background = null;
+            } else if (p >= 90 && p <= 97) {
+                this.state.foreground = ANSI_BRIGHT[p - 90];
+            } else if (p >= 100 && p <= 107) {
+                this.state.background = ANSI_BRIGHT[p - 100];
+            }
+
+            i++;
+        }
+    }
+
+    _extendedColor(params, i) {
+        const mode = params[i + 1];
+
+        if (mode === 5 && Number.isFinite(params[i + 2])) {
+            return { color: ansi256ToHex(params[i + 2]), skip: 2 };
+        }
+
+        if (mode === 2 && Number.isFinite(params[i + 4])) {
+            return {
+                color: rgbToHex(params[i + 2], params[i + 3], params[i + 4]),
+                skip: 4,
+            };
+        }
+
+        return null;
+    }
+
+    _hasStyle() {
+        const s = this.state;
+        return !!(s.bold || s.italic || s.underline || s.dim || s.foreground || s.background);
+    }
+
+    _styleText() {
+        const s = this.state;
+        const parts = [];
+        if (s.foreground) parts.push("color:" + s.foreground);
+        if (s.background) parts.push("background:" + s.background);
+        if (s.bold)       parts.push("font-weight:600");
+        if (s.italic)     parts.push("font-style:italic");
+        if (s.underline)  parts.push("text-decoration:underline");
+        if (s.dim)        parts.push("opacity:0.6");
+        return parts.join(";");
+    }
+}
 
 /* =========================================================
    RESIZABLE LAYOUT (Desktop only)
@@ -786,9 +1334,8 @@ function limits(total) {
 function applyLayout() {
     const rect   = workspace.getBoundingClientRect();
     const mobile = isMobile();
-    
+
     if (mobile) {
-        // Mobile doesn't use the splitter layout, it uses view switching
         rightSection.style.flex = "";
         splitter.style.flex = "";
         editorSection.style.flex = "";
@@ -797,10 +1344,6 @@ function applyLayout() {
 
     const total  = rect.width;
     splitter.setAttribute("aria-orientation", "vertical");
-
-    // Keep the output panel resizable with the splitter.
-    // The old collapse arrow has been removed, so the panel always uses
-    // the saved splitter size instead of switching to a collapsed state.
 
     const { minRight, maxRight } = limits(total);
     const frac = layout.desk;
@@ -867,7 +1410,7 @@ splitter.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft")       setRightSize(current + step);
     else if (e.key === "ArrowRight") setRightSize(current - step);
     else handled = false;
-    
+
     if (e.key === "Home" || e.key === "Enter") {
         layout = Object.assign({}, DEFAULT_LAYOUT);
         applyLayout();
@@ -879,6 +1422,37 @@ splitter.addEventListener("keydown", (e) => {
 window.addEventListener("resize", applyLayout);
 window.addEventListener("orientationchange", () => setTimeout(applyLayout, 150));
 if (mobileQuery.addEventListener) mobileQuery.addEventListener("change", applyLayout);
+
+/* ---------------------------------------------------------
+   Move Run/Stop controls into the editor section on small
+   phones and back to the header otherwise.
+--------------------------------------------------------- */
+const smallScreenQuery = window.matchMedia("(max-width: 600px)");
+
+function relayoutRunControls() {
+    if (smallScreenQuery.matches) {
+        editorSection.appendChild(runControls);
+    } else {
+        headerRight.appendChild(runControls);
+    }
+}
+
+if (smallScreenQuery.addEventListener) {
+    smallScreenQuery.addEventListener("change", relayoutRunControls);
+} else if (smallScreenQuery.addListener) {
+    smallScreenQuery.addListener(relayoutRunControls);
+}
+
+function handleViewportModeChange() {
+    relayoutRunControls();
+    if (!isMobile()) document.body.classList.remove("shell-view");
+}
+
+if (mobileQuery.addEventListener) {
+    mobileQuery.addEventListener("change", handleViewportModeChange);
+} else if (mobileQuery.addListener) {
+    mobileQuery.addListener(handleViewportModeChange);
+}
 
 /* =========================================================
    FONT SIZE
@@ -996,7 +1570,6 @@ function edit(start, end, text, selStart, selEnd) {
     refreshCursor();
 }
 
-/* Replace the whole document (undo-able on desktop; no keyboard pop-up on touch) */
 function replaceAll(text) {
     if (isCoarse) {
         codeEditor.value = text;
@@ -1019,6 +1592,460 @@ function replaceAll(text) {
 }
 
 /* =========================================================
+   TAB / ENTER EDITING (indent, dedent, auto-indent)
+========================================================= */
+function handleTabKey(shift) {
+    const start = codeEditor.selectionStart;
+    const end   = codeEditor.selectionEnd;
+    const value = codeEditor.value;
+
+    if (shift) {
+        const ls = value.lastIndexOf("\n", start - 1) + 1;
+        let le = value.indexOf("\n", end);
+        if (le === -1) le = value.length;
+
+        const lines = value.slice(ls, le).split("\n");
+        const endLineIdx = value.slice(ls, end).split("\n").length - 1;
+
+        let removedFirst = 0;
+        let removedUpToEnd = 0;
+        const newLines = [];
+
+        lines.forEach((l, i) => {
+            const m = l.match(/^( {1,4}|\t)/);
+            const removed = m ? m[0].length : 0;
+            if (i === 0) removedFirst = removed;
+            if (i <= endLineIdx) removedUpToEnd += removed;
+            newLines.push(l.slice(removed));
+        });
+
+        const newBlock = newLines.join("\n");
+        if (newBlock === value.slice(ls, le)) return;
+
+        const newStart = Math.max(ls, start - removedFirst);
+        const newEnd   = Math.max(newStart, end - removedUpToEnd);
+        edit(ls, le, newBlock, newStart, newEnd);
+        return;
+    }
+
+    if (start !== end && value.slice(start, end).includes("\n")) {
+        const ls = value.lastIndexOf("\n", start - 1) + 1;
+        let le = value.indexOf("\n", end);
+        if (le === -1) le = value.length;
+
+        const block = value.slice(ls, le);
+        const newBlock = block.split("\n").map((l) => "    " + l).join("\n");
+        const lineCount = block.split("\n").length;
+        edit(ls, le, newBlock, start + 4, end + 4 * lineCount);
+        return;
+    }
+
+    edit(start, end, "    ");
+}
+
+function handleEnterKey() {
+    const start = codeEditor.selectionStart;
+    const end   = codeEditor.selectionEnd;
+    const value = codeEditor.value;
+    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    const currentLine = value.slice(lineStart, start);
+    const indent = (currentLine.match(/^[ \t]*/) || [""])[0];
+    const extra  = /:\s*$/.test(currentLine) ? "    " : "";
+    edit(start, end, "\n" + indent + extra);
+}
+
+/* =========================================================
+   MULTI-FILE TABS
+========================================================= */
+function defaultFiles() {
+    return [{ name: "main.py", code: DEFAULT_CODE }];
+}
+
+function sanitizeFileName(name) {
+    name = String(name || "").trim();
+    if (!name) return "";
+    name = name.replace(/[\\/:*?"<>|]/g, "_");
+    if (!/\.py$/i.test(name)) name += ".py";
+    return name;
+}
+
+function loadFiles() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(FILES_KEY)); } catch (e) {}
+
+    if (
+        saved &&
+        Array.isArray(saved.files) &&
+        saved.files.length > 0 &&
+        saved.files.every((f) => f && typeof f.name === "string" && typeof f.code === "string")
+    ) {
+        files = saved.files.slice(0, MAX_FILES);
+        activeFileIndex = Math.min(Math.max(0, saved.active | 0), files.length - 1);
+        return;
+    }
+
+    let legacy = null;
+    try { legacy = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    files = [{ name: "main.py", code: typeof legacy === "string" ? legacy : DEFAULT_CODE }];
+    activeFileIndex = 0;
+}
+
+let filesSaveTimer = null;
+function persistFiles() {
+    clearTimeout(filesSaveTimer);
+    filesSaveTimer = setTimeout(() => {
+        try {
+            localStorage.setItem(
+                FILES_KEY,
+                JSON.stringify({ files: files, active: activeFileIndex })
+            );
+        } catch (e) {}
+    }, 250);
+}
+
+function persistCurrentFile() {
+    if (files[activeFileIndex]) files[activeFileIndex].code = codeEditor.value;
+    persistFiles();
+}
+
+function flushFilesNow() {
+    if (files[activeFileIndex]) files[activeFileIndex].code = codeEditor.value;
+    try {
+        localStorage.setItem(
+            FILES_KEY,
+            JSON.stringify({ files: files, active: activeFileIndex })
+        );
+    } catch (e) {}
+}
+
+window.addEventListener("pagehide", flushFilesNow);
+
+function uniqueFileName() {
+    let n = files.length + 1;
+    let name = "file" + n + ".py";
+    while (files.some((f) => f.name === name)) {
+        n++;
+        name = "file" + n + ".py";
+    }
+    return name;
+}
+
+function renderTabs() {
+    fileTabs.innerHTML = "";
+
+    files.forEach((f, idx) => {
+        const tab = document.createElement("div");
+        tab.className = "file-tab" + (idx === activeFileIndex ? " active" : "");
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-selected", idx === activeFileIndex ? "true" : "false");
+        tab.title = f.name;
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "file-tab-name";
+        nameSpan.textContent = f.name;
+        tab.appendChild(nameSpan);
+
+        if (files.length > 1) {
+            const close = document.createElement("button");
+            close.type = "button";
+            close.className = "file-tab-close";
+            close.textContent = "×";
+            close.title = "Close " + f.name;
+            close.setAttribute("aria-label", "Close " + f.name);
+            close.addEventListener("click", (e) => {
+                e.stopPropagation();
+                closeFile(idx);
+            });
+            tab.appendChild(close);
+        }
+
+        tab.addEventListener("click", () => switchFile(idx));
+        fileTabs.appendChild(tab);
+    });
+
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "file-tab file-tab-add";
+    add.textContent = "+";
+    add.title = "New Python file";
+    add.setAttribute("aria-label", "New Python file");
+    add.addEventListener("click", addFile);
+    fileTabs.appendChild(add);
+}
+
+function loadActiveFileIntoEditor() {
+    codeEditor.value = files[activeFileIndex].code || "";
+    errorLine = null;
+    searchMatches = [];
+    searchIndex = -1;
+    searchCount.textContent = "0/0";
+    updateLineNumbers();
+    codeEditor.scrollTop = 0;
+    codeEditor.scrollLeft = 0;
+    syncScroll();
+}
+
+function switchFile(idx) {
+    if (idx === activeFileIndex) return;
+    if (idx < 0 || idx >= files.length) return;
+    persistCurrentFile();
+    activeFileIndex = idx;
+    loadActiveFileIntoEditor();
+    renderTabs();
+    persistFiles();
+    codeEditor.focus();
+}
+
+function addFile() {
+    if (files.length >= MAX_FILES) {
+        alert("You can open up to " + MAX_FILES + " files at once.");
+        return;
+    }
+    persistCurrentFile();
+    files.push({ name: uniqueFileName(), code: "" });
+    activeFileIndex = files.length - 1;
+    loadActiveFileIntoEditor();
+    renderTabs();
+    persistFiles();
+    codeEditor.focus();
+}
+
+function closeFile(idx) {
+    const f = files[idx];
+    if (!f) return;
+
+    if (
+        f.code.trim() &&
+        f.code !== DEFAULT_CODE &&
+        !window.confirm(`Close "${f.name}"? Unsaved changes in this tab will be lost.`)
+    ) {
+        return;
+    }
+
+    files.splice(idx, 1);
+
+    if (files.length === 0) {
+        files = defaultFiles();
+        activeFileIndex = 0;
+    } else {
+        if (idx < activeFileIndex) {
+            activeFileIndex--;
+        } else if (idx === activeFileIndex) {
+            activeFileIndex = Math.min(idx, files.length - 1);
+        }
+    }
+
+    loadActiveFileIntoEditor();
+    renderTabs();
+    persistFiles();
+}
+
+function renameCurrentFile() {
+    const current = files[activeFileIndex];
+    if (!current) return;
+    const name = window.prompt("Rename program:", current.name);
+    if (name === null) return;
+    const clean = sanitizeFileName(name);
+    if (!clean) return;
+    if (files.some((f, i) => i !== activeFileIndex && f.name === clean)) {
+        alert("A file with this name is already open.");
+        return;
+    }
+    current.name = clean;
+    renderTabs();
+    persistFiles();
+}
+
+function clearProgram() {
+    if (!codeEditor.value) return;
+    edit(0, codeEditor.value.length, "");
+}
+
+function resetProgram() {
+    replaceAll(DEFAULT_CODE);
+}
+
+async function copyProgramCode() {
+    const text = codeEditor.value;
+    if (!text) return;
+
+    let ok = false;
+    try {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+    } catch (e) {}
+
+    if (!ok) {
+        const selStart = codeEditor.selectionStart;
+        const selEnd = codeEditor.selectionEnd;
+        codeEditor.focus();
+        codeEditor.select();
+        try { ok = document.execCommand("copy"); } catch (e) {}
+        codeEditor.setSelectionRange(selStart, selEnd);
+    }
+
+    menuCopyButton.textContent = ok ? "Copied!" : "Copy failed";
+    setTimeout(() => { menuCopyButton.textContent = "Copy code"; }, 1200);
+}
+
+function saveProgram() {
+    const current = files[activeFileIndex];
+    const suggested = current ? current.name : "main.py";
+    const name = window.prompt("Save as:", suggested);
+    if (name === null) return;
+    const clean = sanitizeFileName(name) || "main.py";
+
+    const blob = new Blob([codeEditor.value], { type: "text/x-python;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = clean;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+openButton.addEventListener("click", () => openFileInput.click());
+saveAsButton.addEventListener("click", saveProgram);
+findButton.addEventListener("click", openSearch);
+
+undoButton.addEventListener("click", () => {
+    codeEditor.focus();
+    try { document.execCommand("undo"); } catch (e) {}
+    updateLineNumbers();
+    persistCurrentFile();
+});
+redoButton.addEventListener("click", () => {
+    codeEditor.focus();
+    try { document.execCommand("redo"); } catch (e) {}
+    updateLineNumbers();
+    persistCurrentFile();
+});
+
+renameButton.addEventListener("click", renameCurrentFile);
+copyCodeButton.addEventListener("click", copyProgramCode);
+clearButton.addEventListener("click", clearProgram);
+resetButton.addEventListener("click", resetProgram);
+
+openFileInput.addEventListener("change", async () => {
+    const file = openFileInput.files && openFileInput.files[0];
+    openFileInput.value = "";
+    if (!file) return;
+
+    if (files.length >= MAX_FILES) {
+        alert("Too many open files. Close a tab first.");
+        return;
+    }
+
+    let text;
+    try { text = await file.text(); } catch (e) {
+        alert("Could not read the file.");
+        return;
+    }
+
+    const existingIdx = files.findIndex((f) => f.name === file.name);
+    if (existingIdx !== -1) {
+        files[existingIdx].code = text;
+        if (existingIdx === activeFileIndex) {
+            loadActiveFileIntoEditor();
+            renderTabs();
+            persistFiles();
+        } else {
+            switchFile(existingIdx);
+        }
+    } else {
+        persistCurrentFile();
+        files.push({ name: file.name, code: text });
+        activeFileIndex = files.length - 1;
+        loadActiveFileIntoEditor();
+        renderTabs();
+        persistFiles();
+    }
+});
+
+/* =========================================================
+   FIND IN CODE
+========================================================= */
+function computeMatches() {
+    searchMatches = [];
+    const query = searchInput.value;
+    if (!query) return;
+    const t = codeEditor.value.toLowerCase();
+    const q = query.toLowerCase();
+    let idx = 0;
+    while ((idx = t.indexOf(q, idx)) !== -1) {
+        searchMatches.push([idx, idx + query.length]);
+        idx += Math.max(1, query.length);
+    }
+}
+
+function updateSearchCount() {
+    searchCount.textContent = searchMatches.length
+        ? (searchIndex + 1) + "/" + searchMatches.length
+        : "0/0";
+}
+
+function scrollToOffset(offset) {
+    const lh = parseFloat(getComputedStyle(codeEditor).lineHeight) || 22;
+    const line = codeEditor.value.slice(0, offset).split("\n").length;
+    codeEditor.scrollTop = Math.max(0, (line - 1) * lh - codeEditor.clientHeight / 3);
+    syncScroll();
+}
+
+function goToMatch(i) {
+    if (!searchMatches.length) { updateSearchCount(); return; }
+    const n = searchMatches.length;
+    searchIndex = ((i % n) + n) % n;
+    const r = searchMatches[searchIndex];
+    codeEditor.focus();
+    codeEditor.setSelectionRange(r[0], r[1]);
+    scrollToOffset(r[0]);
+    updateSearchCount();
+    refreshCursor();
+}
+
+function openSearch() {
+    editorSearch.classList.add("open");
+    computeMatches();
+    searchIndex = searchMatches.length ? 0 : -1;
+    updateSearchCount();
+    searchInput.focus();
+    searchInput.select();
+}
+
+function closeSearch() {
+    editorSearch.classList.remove("open");
+    searchMatches = [];
+    searchIndex = -1;
+    searchCount.textContent = "0/0";
+    codeEditor.focus();
+}
+
+function refreshSearch() {
+    computeMatches();
+    if (searchIndex >= searchMatches.length) searchIndex = searchMatches.length ? 0 : -1;
+    if (searchIndex === -1 && searchMatches.length) searchIndex = 0;
+    updateSearchCount();
+}
+
+searchInput.addEventListener("input", refreshSearch);
+
+searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        goToMatch(e.shiftKey ? searchIndex - 1 : searchIndex + 1);
+    } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeSearch();
+    }
+});
+
+searchNext.addEventListener("click", () => goToMatch(searchIndex + 1));
+searchPrev.addEventListener("click", () => goToMatch(searchIndex - 1));
+searchClose.addEventListener("click", closeSearch);
+
+/* =========================================================
    SEQUENTIAL INPUT() DETECTION & UI
 ========================================================= */
 function extractInputPrompts() {
@@ -1028,7 +2055,7 @@ function extractInputPrompts() {
     let m;
     while ((m = re.exec(code)) !== null) {
         const lineStart = code.lastIndexOf("\n", m.index - 1) + 1;
-        if (code.slice(lineStart, m.index).includes("#")) continue;   // commented out
+        if (code.slice(lineStart, m.index).includes("#")) continue;
 
         const lit = /\s*(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)')\s*\)/y;
         lit.lastIndex = re.lastIndex;
@@ -1076,8 +2103,6 @@ function renderNextPrompt() {
 }
 
 function resetExecutionInputState() {
-    // Every Run starts with a completely new input/execution session.
-    // Do not carry over any values, queue entries, indexes, or prompt state.
     inputMode = false;
     promptsList = [];
     collectedInputs = [];
@@ -1091,8 +2116,6 @@ function resetExecutionInputState() {
 }
 
 function startInputSequence() {
-    // startInputSequence is also safe to call independently; always rebuild
-    // the sequential input UI from the current editor contents.
     promptsList = extractInputPrompts();
     if (promptsList.length === 0) {
         inputSection.classList.remove("visible");
@@ -1115,9 +2138,10 @@ function startInputSequence() {
 function handleInputSubmit(value) {
     collectedInputs.push(value);
 
-    // Convert the last input field to static text to preserve history
     const lastRow = inputBody.lastChild;
-    const field = lastRow.querySelector(".input-field");
+    const field = lastRow ? lastRow.querySelector(".input-field") : null;
+    if (!field) return;
+
     const staticValue = document.createElement("span");
     staticValue.className = "input-history-value";
     staticValue.textContent = value;
@@ -1133,7 +2157,6 @@ function handleInputSubmit(value) {
     }
 }
 
-/* Keep typed values while the code is edited (restarts sequential input if prompts change) */
 function syncInputRows() {
     if (!inputMode) return;
     const newPrompts = extractInputPrompts();
@@ -1148,7 +2171,6 @@ function getUserInput() {
     return collectedInputs.join("\n");
 }
 
-/* Python's input("prompt") echoes the prompt to stdout; remove it from the output */
 function stripInputPrompts(text) {
     if (!text) return "";
     if (!inputMode) return text;
@@ -1164,1381 +2186,718 @@ function stripInputPrompts(text) {
 }
 
 /* =========================================================
-   STATUS / OUTPUT
+   OUTPUT RENDERING + RUN / STOP
 ========================================================= */
-function setStatus(type, message) {
-    statusDot.className = "status-dot";
-    if (type === "ready")        statusDot.classList.add("ready");
-    else if (type === "running") statusDot.classList.add("running");
-    else if (type === "error")   statusDot.classList.add("error");
-    statusText.textContent = message;
+let ansiRenderer = new AnsiTerminalRenderer();
+
+function clearConsoleContent() {
+    outputConsole.textContent = "";
 }
 
-function resetOutput() {
-    outputConsole.innerHTML = EMPTY_OUTPUT_HTML;
-    copyButton.classList.remove("visible");
-    clearOutputBtn.classList.remove("visible");
-    setStatus("ready", "Ready");
+function appendNode(node) {
+    const ph = outputConsole.querySelector(".output-placeholder");
+    if (ph) ph.remove();
+    outputConsole.appendChild(node);
+    outputConsole.scrollTop = outputConsole.scrollHeight;
 }
 
-function showOutputButtons() {
-    copyButton.classList.add("visible");
-    clearOutputBtn.classList.add("visible");
+function appendNote(text) {
+    const div = document.createElement("div");
+    div.className = "output-placeholder";
+    div.textContent = text;
+    appendNode(div);
 }
 
-/*
- * ANSI / SGR terminal renderer.
- *
- * The parser is deliberately stateful: push() may receive an arbitrary
- * chunk and keeps an incomplete ESC[... sequence until the next chunk.
- * This keeps the renderer safe for streamed/chunked terminal data even
- * though the current /run endpoint returns one JSON response.
- *
- * Normal output is ALWAYS inserted with createTextNode/textContent.
- * Only spans created by this renderer receive styles, so stdout/stderr
- * cannot inject HTML into the Shell Output.
- */
-class AnsiTerminalRenderer {
-    constructor() {
-        this.buffer = "";
-        this.state = {
-            bold: false,
-            italic: false,
-            underline: false,
-            foreground: null,
-            background: null,
-        };
-    }
+function renderStdout(text) {
+    const cleaned = inputMode ? stripInputPrompts(text) : text;
+    if (!cleaned) return;
+    appendNode(ansiRenderer.push(cleaned));
+    appendNode(ansiRenderer.finish());
+}
 
-    push(chunk) {
-        if (chunk === null || chunk === undefined) return document.createDocumentFragment();
-        this.buffer += String(chunk);
-        return this._parse(false);
-    }
+const TRACEBACK_FILE_RE = /^(\s*)File "([^"]*)", line (\d+)(.*)$/;
 
-    finish() {
-        return this._parse(true);
-    }
+function renderTraceback(errText) {
+    const block = document.createElement("div");
+    block.className = "output-error";
+    let lastErrLine = null;
 
-    _parse(flush) {
-        const frag = document.createDocumentFragment();
-        let text = "";
+    errText.split("\n").forEach((line) => {
+        const m = line.match(TRACEBACK_FILE_RE);
+        if (m) {
+            const n = parseInt(m[3], 10);
+            lastErrLine = n;
 
-        const emitText = () => {
-            if (!text) return;
-            if (this._hasStyle()) {
-                const span = document.createElement("span");
-                span.style.cssText = this._styleText();
-                span.textContent = text;
-                frag.appendChild(span);
-            } else {
-                frag.appendChild(document.createTextNode(text));
-            }
-            text = "";
-        };
+            const pre = document.createElement("span");
+            pre.textContent = m[1] + 'File "' + m[2] + '", ';
+            block.appendChild(pre);
 
-        const source = this.buffer;
-        let i = 0;
+            const link = document.createElement("span");
+            link.className = "error-link";
+            link.textContent = "line " + n;
+            link.title = "Go to line " + n;
+            link.addEventListener("click", () => goToLine(n));
+            block.appendChild(link);
 
-        while (i < source.length) {
-            const ch = source[i];
-
-            if (ch !== "\x1b") {
-                text += ch;
-                i++;
-                continue;
-            }
-
-            // ESC[ ... final-byte is a CSI sequence. Keep incomplete data
-            // for the next chunk instead of displaying it as raw text.
-            if (i + 1 >= source.length) {
-                if (!flush) break;
-                i++;
-                continue;
-            }
-
-            if (source[i + 1] !== "[") {
-                // Unknown ANSI escape: consume the ESC itself, but preserve
-                // the following printable character as normal terminal text.
-                i++;
-                continue;
-            }
-
-            let j = i + 2;
-            while (j < source.length && !(source.charCodeAt(j) >= 0x40 && source.charCodeAt(j) <= 0x7e)) {
-                j++;
-            }
-
-            if (j >= source.length) {
-                if (!flush) break;
-                // Incomplete sequence at the end of the final chunk: do not
-                // leak its control syntax into the Shell Output.
-                i = source.length;
-                continue;
-            }
-
-            const finalByte = source[j];
-            const paramsText = source.slice(i + 2, j);
-            emitText();
-
-            if (finalByte === "m") {
-                this._applySgr(paramsText);
-            }
-
-            i = j + 1;
-        }
-
-        if (flush || i > 0) {
-            this.buffer = source.slice(i);
-        }
-        emitText();
-        return frag;
-    }
-
-    _applySgr(paramsText) {
-        let params;
-        if (paramsText === "" || paramsText === ";") {
-            params = [0];
+            const post = document.createElement("span");
+            post.textContent = m[4] + "\n";
+            block.appendChild(post);
         } else {
-            params = paramsText.split(";").map(v => v === "" ? 0 : Number(v));
+            block.appendChild(ansiRenderer.push(line));
+            block.appendChild(document.createTextNode("\n"));
         }
-
-        for (let i = 0; i < params.length; i++) {
-            const code = params[i];
-            if (!Number.isFinite(code)) continue;
-
-            if (code === 0) {
-                this.state.bold = false;
-                this.state.italic = false;
-                this.state.underline = false;
-                this.state.foreground = null;
-                this.state.background = null;
-            } else if (code === 1) {
-                this.state.bold = true;
-            } else if (code === 22) {
-                this.state.bold = false;
-            } else if (code === 3) {
-                this.state.italic = true;
-            } else if (code === 23) {
-                this.state.italic = false;
-            } else if (code === 4) {
-                this.state.underline = true;
-            } else if (code === 24) {
-                this.state.underline = false;
-            } else if (code === 39) {
-                this.state.foreground = null;
-            } else if (code === 49) {
-                this.state.background = null;
-            } else if (code >= 30 && code <= 37) {
-                this.state.foreground = ANSI_COLORS[code - 30];
-            } else if (code >= 40 && code <= 47) {
-                this.state.background = ANSI_COLORS[code - 40];
-            } else if (code >= 90 && code <= 97) {
-                this.state.foreground = ANSI_BRIGHT_COLORS[code - 90];
-            } else if (code >= 100 && code <= 107) {
-                this.state.background = ANSI_BRIGHT_COLORS[code - 100];
-            } else if (code === 38 || code === 48) {
-                const isBackground = code === 48;
-                const mode = params[i + 1];
-
-                if (mode === 5 && Number.isFinite(params[i + 2])) {
-                    const color = ansi256Color(params[i + 2]);
-                    if (isBackground) this.state.background = color;
-                    else this.state.foreground = color;
-                    i += 2;
-                } else if (mode === 2 && params.length >= i + 5 &&
-                           params.slice(i + 2, i + 5).every(Number.isFinite)) {
-                    const color = `rgb(${params[i + 2]}, ${params[i + 3]}, ${params[i + 4]})`;
-                    if (isBackground) this.state.background = color;
-                    else this.state.foreground = color;
-                    i += 4;
-                }
-            }
-        }
-    }
-
-    _hasStyle() {
-        return this.state.bold || this.state.italic || this.state.underline ||
-               !!this.state.foreground || !!this.state.background;
-    }
-
-    _styleText() {
-        const styles = [];
-        if (this.state.foreground) styles.push(`color:${this.state.foreground}`);
-        if (this.state.background) styles.push(`background-color:${this.state.background}`);
-        if (this.state.bold) styles.push("font-weight:700");
-        if (this.state.italic) styles.push("font-style:italic");
-        if (this.state.underline) styles.push("text-decoration:underline");
-        return styles.join(";");
-    }
-}
-
-const ANSI_COLORS = [
-    "#000000", "#cd3131", "#0dbc79", "#e5e510",
-    "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5"
-];
-
-const ANSI_BRIGHT_COLORS = [
-    "#666666", "#f14c4c", "#23d18b", "#f5f543",
-    "#3b8eea", "#d670d6", "#29b8db", "#ffffff"
-];
-
-function ansi256Color(n) {
-    n = Math.max(0, Math.min(255, Number(n) || 0));
-    if (n < 8) return ANSI_COLORS[n];
-    if (n < 16) return ANSI_BRIGHT_COLORS[n - 8];
-    if (n >= 232) {
-        const v = 8 + (n - 232) * 10;
-        return `rgb(${v}, ${v}, ${v})`;
-    }
-    const index = n - 16;
-    const r = Math.floor(index / 36);
-    const g = Math.floor((index % 36) / 6);
-    const b = index % 6;
-    const level = [0, 95, 135, 175, 215, 255];
-    return `rgb(${level[r]}, ${level[g]}, ${level[b]})`;
-}
-
-function renderAnsiText(text) {
-    const renderer = new AnsiTerminalRenderer();
-    const frag = renderer.push(text || "");
-    const tail = renderer.finish();
-    frag.appendChild(tail);
-    return frag;
-}
-
-/*
- * Render a traceback with ANSI styling while preserving the existing
- * clickable "File \"main.py\", line N" behavior.
- */
-function renderErrorText(text) {
-    const root = document.createDocumentFragment();
-    const styled = renderAnsiText(text || "");
-    const walker = document.createTreeWalker(styled, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    let node;
-    while ((node = walker.nextNode())) nodes.push(node);
-
-    const re = /(File "main\.py", )(line (\d+))/g;
-    let lastLine = null;
-
-    nodes.forEach((textNode) => {
-        const value = textNode.nodeValue || "";
-        re.lastIndex = 0;
-        if (!re.test(value)) return;
-        re.lastIndex = 0;
-
-        const replacement = document.createDocumentFragment();
-        let last = 0;
-        let m;
-        while ((m = re.exec(value)) !== null) {
-            if (m.index > last) replacement.appendChild(document.createTextNode(value.slice(last, m.index + m[1].length)));
-            else replacement.appendChild(document.createTextNode(m[1]));
-
-            const a = document.createElement("a");
-            a.href = "#";
-            a.className = "error-link";
-            a.textContent = m[2];
-            a.dataset.line = m[3];
-            a.title = "Go to this line";
-            replacement.appendChild(a);
-            last = m.index + m[0].length;
-            lastLine = parseInt(m[3], 10);
-        }
-        if (last < value.length) replacement.appendChild(document.createTextNode(value.slice(last)));
-        textNode.parentNode.replaceChild(replacement, textNode);
     });
 
-    while (styled.firstChild) root.appendChild(styled.firstChild);
-    return { frag: root, lastLine };
-}
+    appendNode(block);
 
-/* Render terminal output safely; stdout and stderr use the same ANSI path. */
-function renderShellOutput(container, text) {
-    container.replaceChildren();
-    const renderer = new AnsiTerminalRenderer();
-    container.appendChild(renderer.push(text || ""));
-    container.appendChild(renderer.finish());
-    return renderer;
-}
-
-
-function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        return navigator.clipboard.writeText(text);
+    if (lastErrLine !== null) {
+        errorLine = lastErrLine;
+        renderGutter();
     }
-    return new Promise((resolve, reject) => {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
-        document.body.appendChild(ta);
-        ta.select();
-        let ok = false;
-        try { ok = document.execCommand("copy"); } catch (e) {}
-        document.body.removeChild(ta);
-        ok ? resolve() : reject();
-    });
 }
 
-function flashLabel(btn, text) {
-    const original = btn.textContent;
-    btn.textContent = text;
-    setTimeout(() => btn.textContent = original, 1200);
+function maybeOfferMoreInput(errText) {
+    if (!errText.includes("EOFError")) return;
+
+    promptsList.push("");
+    currentPromptIndex = promptsList.length - 1;
+
+    inputMode = true;
+    inputSection.classList.add("visible");
+    inputStatus.textContent = "Program needs more input";
+
+    renderNextPrompt();
 }
 
-/* =========================================================
-   RUN / STOP
-========================================================= */
-async function runCode() {
+function runFlow() {
     if (running) return;
 
-    const code = codeEditor.value;
-    if (!code.trim()) {
-        outputConsole.innerHTML =
-            `<div class="output-error">Please enter some Python code.</div>`;
-        setStatus("error", "Error");
-        return;
-    }
-
-    // IMPORTANT: every Run is a brand-new execution.
-    // Clear all input values, the input queue/index, prompt state, and
-    // previous execution state before looking for input() again.
     resetExecutionInputState();
+    renderGutter();
+    resetOutput();
+    setStatus("running", "Running");
 
-    if (isMobile()) {
-        document.body.classList.add("shell-view");
-    }
+    if (isMobile()) document.body.classList.add("shell-view");
 
-    if (hasInputFunction()) {
-        outputConsole.innerHTML =
-            `<div class="output-placeholder">Enter the required values above, then click Run again.</div>`;
-        startInputSequence();
+    if (startInputSequence()) {
         setStatus("running", "Waiting for input");
         return;
     }
 
-    await executeCode();
+    executeCode();
 }
 
-
-
 async function executeCode() {
+    if (running) return;
     running = true;
+
     errorLine = null;
     renderGutter();
-    runButton.disabled = true;
+
+    ansiRenderer = new AnsiTerminalRenderer();
+    clearConsoleContent();
+
     runButton.classList.add("hidden");
     stopButton.classList.add("visible");
-    setStatus("running", "Running...");
+    setStatus("running", "Running…");
 
-    outputConsole.innerHTML =
-        `<div class="output-placeholder">Running your Python program...</div>`;
-    copyButton.classList.remove("visible");
-    clearOutputBtn.classList.remove("visible");
-
-    const userInput = inputMode ? getUserInput() : "";
-    const t0 = performance.now();
     abortCtrl = new AbortController();
 
     try {
         const resp = await fetch("/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: codeEditor.value, input: userInput }),
+            body: JSON.stringify({
+                code: codeEditor.value,
+                input: getUserInput(),
+            }),
             signal: abortCtrl.signal,
         });
-        const data = await resp.json();
-        const secs = ((performance.now() - t0) / 1000).toFixed(2);
 
-        outputConsole.innerHTML = "";
+        let data = null;
+        try { data = await resp.json(); } catch (e) {}
 
-        if (data.success) {
-            const out = stripInputPrompts(data.output || "");
-
-            if (out.trim().length === 0) {
-                outputConsole.innerHTML =
-                    `<div class="output-placeholder">Program finished successfully with no output.</div>`;
-            } else {
-                renderShellOutput(outputConsole, out);
-                showOutputButtons();
-            }
-            setStatus("ready", `Finished · ${secs}s`);
-            if (inputMode) inputStatus.textContent = "Completed";
-        } else {
-            const cleanOutput = stripInputPrompts(data.output);
-
-            if (cleanOutput) {
-                const block = document.createElement("div");
-                block.appendChild(renderAnsiText(cleanOutput));
-                outputConsole.appendChild(block);
-            }
-
-            let errText = data.error || "Program error.";
-            if (/EOFError/.test(errText)) {
-                errText += "\n\nHint: the program asked for more input() values than were provided. " +
-                           "Make sure your code has the right number of input() calls and run again.";
-            }
-
-            const err = document.createElement("div");
-            err.className = "output-error";
-            err.style.marginTop = cleanOutput ? "10px" : "0";
-            const { frag, lastLine } = renderErrorText(errText);
-            err.appendChild(frag);
-            outputConsole.appendChild(err);
-
-            if (lastLine) { errorLine = lastLine; renderGutter(); }
-
+        if (!data) {
+            renderServerError("Server error (HTTP " + resp.status + ").");
             setStatus("error", "Error");
-            showOutputButtons();
+            return;
         }
+
+        renderResult(data);
     } catch (err) {
-        if (err.name === "AbortError") {
-            outputConsole.innerHTML =
-                `<div class="output-placeholder">Execution cancelled.</div>`;
-            setStatus("ready", "Cancelled");
+        if (err && err.name === "AbortError") {
+            appendNote("Stopped. (The server may still finish this run in the background.)");
+            setStatus("error", "Stopped");
+            showOutputButtons();
         } else {
-            outputConsole.innerHTML =
-                `<div class="output-error">Unable to connect to the Python server.</div>`;
-            setStatus("error", "Connection Error");
+            renderServerError("Could not reach the server. Please check your connection and try again.");
+            setStatus("error", "Error");
         }
     } finally {
         running = false;
         abortCtrl = null;
-        runButton.disabled = false;
-        runButton.classList.remove("hidden");
         stopButton.classList.remove("visible");
+        runButton.classList.remove("hidden");
     }
 }
 
-function stopRun() { if (abortCtrl) abortCtrl.abort(); }
+function renderServerError(message) {
+    clearConsoleContent();
+    const div = document.createElement("div");
+    div.className = "output-error";
+    div.textContent = message;
+    appendNode(div);
+    showOutputButtons();
+}
+
+function renderResult(data) {
+    if (data.output) renderStdout(data.output);
+
+    const errText = (data.error || "").replace(/\s+$/, "");
+    if (errText) {
+        renderTraceback(errText);
+
+        if (/timed out/i.test(errText)) setStatus("error", "Timed out");
+        else setStatus("error", "Error");
+
+        maybeOfferMoreInput(errText);
+    } else {
+        if (!data.output) appendNote("Program finished with no output.");
+        setStatus("ready", "Finished");
+    }
+
+    showOutputButtons();
+}
+
+runButton.addEventListener("click", runFlow);
+
+stopButton.addEventListener("click", () => {
+    if (abortCtrl) abortCtrl.abort();
+});
 
 headerBackBtn.addEventListener("click", () => {
+    // Leaving the shell also closes the package terminal.
+    pkgLayer.classList.remove("open");
     document.body.classList.remove("shell-view");
-    if (!isCoarse) codeEditor.focus();
+});
+
+copyButton.addEventListener("click", async () => {
+    const text = outputConsole.innerText.replace(/\n$/, "");
+    try {
+        await navigator.clipboard.writeText(text);
+        copyButton.textContent = "Copied!";
+        setTimeout(() => { copyButton.textContent = "Copy"; }, 1200);
+    } catch (e) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch (err) {}
+        ta.remove();
+    }
+});
+
+clearOutputBtn.addEventListener("click", resetOutput);
+
+/* =========================================================
+   INSTALLED LIBRARIES — simple list panel
+   - Opens ONLY when "Installed Libraries" is clicked.
+     (No hover-open.)
+   - Clicking the item again closes it.
+   - Also closes on: outside click, Esc, or when the menu closes.
+========================================================= */
+function libFlyoutIsOpen() {
+    return libFlyout.classList.contains("open");
+}
+
+function openLibFlyout() {
+    libFlyout.classList.add("open");
+    menuLibrariesButton.classList.add("submenu-open");
+    menuLibrariesButton.setAttribute("aria-expanded", "true");
+    refreshLibraryList();
+}
+
+function closeLibFlyout() {
+    libFlyout.classList.remove("open");
+    menuLibrariesButton.classList.remove("submenu-open");
+    menuLibrariesButton.setAttribute("aria-expanded", "false");
+}
+
+function maybeRefreshLibFlyout() {
+    if (libFlyoutIsOpen()) refreshLibraryList();
+}
+
+/* Click toggles the list. */
+menuLibrariesButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (libFlyoutIsOpen()) closeLibFlyout();
+    else openLibFlyout();
+});
+
+/* Footer jumps straight into the package terminal */
+libFlyoutOpenTerminal.addEventListener("click", () => {
+    closeEditorMenu();
+    if (isMobile()) document.body.classList.add("shell-view");
+    pkgOpen();
+});
+
+async function refreshLibraryList() {
+    libFlyoutList.textContent = "";
+    libFlyoutCount.style.color = "";
+    libFlyoutCount.textContent = "loading…";
+
+    let pkgs = [];
+    try {
+        const r = await fetch("/packages");
+        const d = await r.json();
+        pkgs = (d && d.packages) || [];
+    } catch (e) {
+        libFlyoutCount.textContent = "could not load";
+        libFlyoutCount.style.color = "#dc2626";
+        return;
+    }
+
+    libFlyoutCount.textContent = pkgs.length ? String(pkgs.length) : "";
+
+    if (!pkgs.length) {
+        const empty = document.createElement("div");
+        empty.className = "lib-empty";
+        empty.textContent = "No libraries installed.";
+        libFlyoutList.appendChild(empty);
+        return;
+    }
+
+    pkgs.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "lib-row";
+
+        const nm = document.createElement("span");
+        nm.className = "lib-name";
+        nm.textContent = p.name;
+        nm.title = p.name;
+        row.appendChild(nm);
+
+        if (p.version) {
+            const ver = document.createElement("span");
+            ver.className = "lib-ver";
+            ver.textContent = p.version;
+            row.appendChild(ver);
+        }
+
+        const rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "lib-remove";
+        rm.textContent = "×";
+        rm.title = "Uninstall " + p.name;
+        rm.setAttribute("aria-label", "Uninstall " + p.name);
+        rm.addEventListener("click", () => uninstallFromFlyout(p.name, rm));
+        row.appendChild(rm);
+
+        libFlyoutList.appendChild(row);
+    });
+}
+
+async function uninstallFromFlyout(name, button) {
+    button.disabled = true;
+    button.textContent = "…";
+
+    let ok = false;
+    let errMsg = "";
+    try {
+        const resp = await fetch("/packages/uninstall", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name }),
+        });
+        let d = null;
+        try { d = await resp.json(); } catch (e) {}
+        if (d && d.success) ok = true;
+        else errMsg = (d && d.error) || "Uninstall failed.";
+    } catch (e) {
+        errMsg = "Could not reach the server.";
+    }
+
+    if (ok) {
+        refreshLibraryList();
+    } else {
+        libFlyoutCount.style.color = "#dc2626";
+        libFlyoutCount.textContent = errMsg;
+        button.disabled = false;
+        button.textContent = "×";
+    }
+}
+
+/* =========================================================
+   PACKAGE TERMINAL (desktop-style, replaces the shell panel)
+========================================================= */
+let pkgBusy = false;
+let pkgHistory = [];
+let pkgHistoryIdx = -1;
+
+const PKG_HELP_TEXT =
+`Available commands:
+  install <package>      Install a package        e.g. install numpy
+  install pkg==1.2.3     Install a pinned version e.g. install requests==2.31.0
+  uninstall <package>    Remove a package (and its bundled dependencies)
+  list                   Show installed packages
+  clear                  Clear this terminal
+  exit / quit            Close the terminal
+
+Installed libraries are importable immediately in your code.
+Tip: use ↑ / ↓ for command history.`;
+
+function pkgPrint(text, cls) {
+    const div = document.createElement("div");
+    if (cls) div.className = cls;
+    div.textContent = text;
+    pkgTerminal.appendChild(div);
+    pkgTerminal.scrollTop = pkgTerminal.scrollHeight;
+}
+
+/* Echo a command with a colored shell prompt, like a real terminal */
+function pkgEcho(cmd) {
+    const div = document.createElement("div");
+
+    const user = document.createElement("span");
+    user.className = "p-user";
+    user.textContent = "student@pyolympiad:";
+
+    const path = document.createElement("span");
+    path.className = "p-path";
+    path.textContent = "~";
+
+    const dollar = document.createElement("span");
+    dollar.textContent = "$ ";
+
+    const body = document.createElement("span");
+    body.className = "t-cmd";
+    body.textContent = cmd;
+
+    div.appendChild(user);
+    div.appendChild(path);
+    div.appendChild(dollar);
+    div.appendChild(body);
+
+    pkgTerminal.appendChild(div);
+    pkgTerminal.scrollTop = pkgTerminal.scrollHeight;
+}
+
+function pkgIsOpen() {
+    return pkgLayer.classList.contains("open");
+}
+
+function pkgOpen() {
+    pkgLayer.classList.add("open");
+    if (!pkgTerminal.childElementCount) {
+        pkgPrint("PyOlympiad 1.0.0 (Python 3) — package terminal", "t-dim");
+        pkgPrint("Installed libraries are importable in every Run on this server session.", "t-dim");
+        pkgPrint("Hosting is ephemeral — for permanent dependencies add them to requirements.txt.", "t-dim");
+        pkgPrint("");
+        pkgPrint("Type 'help' for available commands.", "t-dim");
+        pkgPrint("");
+    }
+    setTimeout(() => pkgInput.focus(), 50);
+}
+
+function pkgClosePanel() {
+    pkgLayer.classList.remove("open");
+}
+
+pkgExit.addEventListener("click", pkgClosePanel);
+pkgDotClose.addEventListener("click", pkgClosePanel);
+packagesButton.addEventListener("click", () => {
+    if (pkgIsOpen()) pkgClosePanel();
+    else pkgOpen();
+});
+
+function setPkgBusy(b) {
+    pkgBusy = b;
+    pkgRun.disabled = b;
+    pkgInput.disabled = b;
+}
+
+async function pkgApi(path, body) {
+    const resp = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+    });
+    let data = null;
+    try { data = await resp.json(); } catch (e) {}
+    if (!data) data = { success: false, error: "Server error (HTTP " + resp.status + ")." };
+    return data;
+}
+
+async function doPkgInstall(spec) {
+    setPkgBusy(true);
+    pkgPrint("Collecting " + spec + " … this may take up to a minute.", "t-dim");
+    try {
+        const d = await pkgApi("/packages/install", { name: spec });
+        if (d.output) pkgPrint(d.output);
+        if (d.success) {
+            pkgPrint("✔ " + (d.message || ("Installed " + spec + ".")), "t-ok");
+        } else {
+            pkgPrint("✖ " + (d.error || "Install failed."), "t-err");
+        }
+    } catch (e) {
+        pkgPrint("✖ Could not reach the server.", "t-err");
+    } finally {
+        setPkgBusy(false);
+        maybeRefreshLibFlyout();
+        pkgInput.focus();
+    }
+}
+
+async function doPkgUninstall(name) {
+    setPkgBusy(true);
+    pkgPrint("Removing " + name + " …", "t-dim");
+    try {
+        const d = await pkgApi("/packages/uninstall", { name: name });
+        if (d.success) {
+            pkgPrint("✔ " + (d.message || ("Removed " + name + ".")), "t-ok");
+        } else {
+            pkgPrint("✖ " + (d.error || "Uninstall failed."), "t-err");
+        }
+    } catch (e) {
+        pkgPrint("✖ Could not reach the server.", "t-err");
+    } finally {
+        setPkgBusy(false);
+        maybeRefreshLibFlyout();
+        pkgInput.focus();
+    }
+}
+
+async function doPkgList() {
+    setPkgBusy(true);
+    try {
+        const r = await fetch("/packages");
+        const d = await r.json();
+        const pkgs = (d && d.packages) || [];
+        if (!pkgs.length) {
+            pkgPrint("No packages installed.", "t-dim");
+        } else {
+            pkgPrint("Package              Version  Size");
+            pkgPrint("-------------------  -------  --------");
+            pkgs.forEach((p) => {
+                const kb = Math.max(1, Math.round((p.size || 0) / 1024));
+                pkgPrint(
+                    (p.name + "                   ").slice(0, 20) + "  " +
+                    ((p.version || "-") + "       ").slice(0, 7) + "  " +
+                    kb + " KB"
+                );
+            });
+        }
+    } catch (e) {
+        pkgPrint("✖ Could not reach the server.", "t-err");
+    } finally {
+        setPkgBusy(false);
+        pkgInput.focus();
+    }
+}
+
+function runPkgCommand(raw) {
+    const line = String(raw || "").trim();
+    if (!line) return;
+
+    if (pkgBusy) {
+        pkgPrint("Please wait for the current operation to finish.", "t-dim");
+        return;
+    }
+
+    pkgEcho(line);
+
+    const m = line.match(/^(?:pip3?\s+)?(install|uninstall|remove|add|list|ls|installed|help|clear|cls|exit|quit)\b\s*(.*)$/i);
+    if (!m) {
+        pkgPrint("bash: " + line.split(/\s+/)[0] + ": command not found — type 'help'.", "t-err");
+        return;
+    }
+
+    const cmd = m[1].toLowerCase();
+    const rest = m[2].trim();
+
+    if (cmd === "help") {
+        pkgPrint(PKG_HELP_TEXT, "t-dim");
+        return;
+    }
+    if (cmd === "clear" || cmd === "cls") {
+        pkgTerminal.textContent = "";
+        return;
+    }
+    if (cmd === "exit" || cmd === "quit") {
+        pkgPrint("logout", "t-dim");
+        setTimeout(pkgClosePanel, 250);
+        return;
+    }
+    if (cmd === "list" || cmd === "ls" || cmd === "installed") {
+        doPkgList();
+        return;
+    }
+    if (cmd === "install" || cmd === "add") {
+        if (!rest) {
+            pkgPrint("Usage: install <package>   e.g. install requests==2.31.0", "t-err");
+            return;
+        }
+        doPkgInstall(rest.split(/\s+/)[0]);
+        return;
+    }
+    if (cmd === "uninstall" || cmd === "remove") {
+        if (!rest) {
+            pkgPrint("Usage: uninstall <package>", "t-err");
+            return;
+        }
+        doPkgUninstall(rest.split(/\s+/)[0].replace(/==.*$/, ""));
+        return;
+    }
+}
+
+pkgForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (pkgBusy) return;
+    const v = pkgInput.value;
+    if (v.trim()) {
+        pkgHistory.push(v.trim());
+        if (pkgHistory.length > 50) pkgHistory.shift();
+        pkgHistoryIdx = pkgHistory.length;
+    }
+    pkgInput.value = "";
+    runPkgCommand(v);
+});
+
+pkgInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowUp") {
+        if (!pkgHistory.length) return;
+        e.preventDefault();
+        pkgHistoryIdx = Math.max(0, pkgHistoryIdx - 1);
+        pkgInput.value = pkgHistory[pkgHistoryIdx] || "";
+    } else if (e.key === "ArrowDown") {
+        if (!pkgHistory.length) return;
+        e.preventDefault();
+        pkgHistoryIdx = Math.min(pkgHistory.length, pkgHistoryIdx + 1);
+        pkgInput.value = pkgHistory[pkgHistoryIdx] || "";
+    }
 });
 
 /* =========================================================
-   OPEN / SAVE AS / UNDO / REDO / CLEAR / RESET / COPY
+   EDITOR MENU
 ========================================================= */
-
-let currentFileName = "main.py";
-let currentTabId = "file-1";
-let fileTabs = [{ id: currentTabId, name: "main.py", code: DEFAULT_CODE, fileHandle: null }];
-const fileTabsEl = document.getElementById("fileTabs");
-
-function activeTab() {
-    return fileTabs.find(tab => tab.id === currentTabId) || fileTabs[0];
-}
-
-function renderFileTabs() {
-    if (!fileTabsEl) return;
-    fileTabsEl.innerHTML = "";
-
-    fileTabs.forEach(tab => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "file-tab" + (tab.id === currentTabId ? " active" : "");
-        button.setAttribute("role", "tab");
-        button.setAttribute("aria-selected", tab.id === currentTabId ? "true" : "false");
-        button.title = tab.name;
-
-        const name = document.createElement("span");
-        name.textContent = tab.name;
-        button.appendChild(name);
-
-        if (fileTabs.length > 1) {
-            const close = document.createElement("span");
-            close.className = "file-tab-close";
-            close.textContent = "×";
-            close.title = "Close file";
-            close.addEventListener("click", (event) => {
-                event.stopPropagation();
-                closeFileTab(tab.id);
-            });
-            button.appendChild(close);
-        }
-
-        button.addEventListener("click", () => switchFileTab(tab.id));
-        fileTabsEl.appendChild(button);
-    });
-
-    const add = document.createElement("button");
-    add.type = "button";
-    add.className = "file-tab file-tab-add";
-    add.textContent = "+";
-    add.title = "Add new Python file";
-    add.setAttribute("aria-label", "Add new Python file");
-    add.addEventListener("click", createNewFile);
-    fileTabsEl.appendChild(add);
-}
-
-function syncActiveTab() {
-    const tab = activeTab();
-    if (tab) {
-        tab.name = currentFileName;
-        tab.code = codeEditor.value;
-    }
-}
-
-function updateFileName(name) {
-    currentFileName = name || "main.py";
-    const tab = activeTab();
-    if (tab) tab.name = currentFileName;
-    if (fileNameDisplay) fileNameDisplay.textContent = currentFileName;
-    renderFileTabs();
-}
-
-function uniquePythonName(base = "main.py") {
-    const clean = normalizePythonFileName(base, "main.py");
-    const existing = new Set(fileTabs.map(tab => tab.name.toLowerCase()));
-    if (!existing.has(clean.toLowerCase())) return clean;
-    const stem = clean.replace(/\.py$/i, "");
-    let n = 2;
-    while (existing.has(`${stem}${n}.py`.toLowerCase())) n++;
-    return `${stem}${n}.py`;
-}
-
-function createNewFile() {
-    syncActiveTab();
-    const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const name = uniquePythonName("main.py");
-    fileTabs.push({ id, name, code: DEFAULT_CODE, fileHandle: null });
-    currentTabId = id;
-    currentFileName = name;
-    codeEditor.value = DEFAULT_CODE;
-    hideInputs();
-    resetOutput();
-    renderFileTabs();
-    updateFileName(name);
-    saveCode();
-    updateLineNumbers();
-    if (!isCoarse) codeEditor.focus();
-    setStatus("ready", `New file · ${name}`);
-}
-
-function switchFileTab(id) {
-    if (id === currentTabId) return;
-    syncActiveTab();
-    const tab = fileTabs.find(item => item.id === id);
-    if (!tab) return;
-    currentTabId = id;
-    currentFileName = tab.name;
-    codeEditor.value = tab.code;
-    hideInputs();
-    resetOutput();
-    renderFileTabs();
-    if (fileNameDisplay) fileNameDisplay.textContent = currentFileName;
-    saveCode();
-    updateHighlight();
-    updateLineNumbers();
-    if (!isCoarse) codeEditor.focus();
-    setStatus("ready", `Opened · ${currentFileName}`);
-}
-
-function closeFileTab(id) {
-    if (fileTabs.length === 1) {
-        setStatus("ready", "At least one Python file must remain open");
-        return;
-    }
-    const index = fileTabs.findIndex(tab => tab.id === id);
-    if (index < 0) return;
-    const closingCurrent = id === currentTabId;
-    fileTabs.splice(index, 1);
-    if (closingCurrent) {
-        const next = fileTabs[Math.max(0, index - 1)];
-        currentTabId = next.id;
-        currentFileName = next.name;
-        codeEditor.value = next.code;
-        updateFileName(next.name);
-        updateHighlight();
-        updateLineNumbers();
-        hideInputs();
-        resetOutput();
-    }
-    saveCode();
-    renderFileTabs();
-    setStatus("ready", `File closed · ${currentFileName}`);
-}
-
-
-function undoEdit() {
-    codeEditor.focus();
-    try {
-        document.execCommand("undo");
-    } catch (e) {}
-    saveCode();
-    updateLineNumbers();
-}
-
-function redoEdit() {
-    codeEditor.focus();
-    try {
-        document.execCommand("redo");
-    } catch (e) {}
-    saveCode();
-    updateLineNumbers();
-}
-
-function openSelectedFile(file) {
-    if (!file) return;
-
-    const filename = file.name || "";
-    if (!/\.py$/i.test(filename)) {
-        openFileInput.value = "";
-        outputConsole.innerHTML =
-            `<div class="output-error">Only Python (.py) files can be opened.</div>`;
-        setStatus("error", "Python files only");
-        return;
-    }
-
-    file.text().then((text) => {
-        hideInputs();
-        resetOutput();
-
-        /*
-         * setRangeText is used so the browser keeps the textarea's
-         * normal edit/selection behavior. The loaded document becomes
-         * the current editor content without changing the editor UI.
-         */
-        syncActiveTab();
-        const existing = fileTabs.find(tab => tab.name.toLowerCase() === file.name.toLowerCase());
-        if (existing) {
-            existing.code = text;
-
-            currentTabId = existing.id;
-        } else {
-            const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            fileTabs.push({ id, name: file.name, code: text, fileHandle: null });
-            currentTabId = id;
-        }
-        currentFileName = file.name;
-        codeEditor.value = text;
-        updateFileName(file.name);
-        saveCode();
-        updateHighlight();
-        updateLineNumbers();
-
-        if (!isCoarse) codeEditor.focus();
-    }).catch(() => {
-        outputConsole.innerHTML =
-            `<div class="output-error">Unable to open the selected file.</div>`;
-        setStatus("error", "Open Error");
-    }).finally(() => {
-        openFileInput.value = "";
-    });
-}
-
-function normalizePythonFileName(name, fallback = "main.py") {
-    let filename = (name || "").trim();
-    if (!filename) filename = fallback;
-
-    // Keep this application Python-only. Remove path separators so the
-    // browser/OS controls the destination folder, not the typed filename.
-    filename = filename.replace(/[\\/]+/g, "");
-
-    if (!/\.py$/i.test(filename)) {
-        filename = filename.replace(/\.[^./\\]*$/, "") + ".py";
-    }
-
-    return filename || "main.py";
-}
-
-async function chooseSaveLocation(suggestedName, description) {
-    const filename = normalizePythonFileName(suggestedName);
-
-    // Desktop Chromium browsers can open the real Save As picker. This avoids
-    // the normal browser download flow and lets the user choose a folder.
-    if (window.showSaveFilePicker) {
-        try {
-            const handle = await window.showSaveFilePicker({
-                suggestedName: filename,
-                types: [{
-                    description: description || "Python program",
-                    accept: { "text/x-python": [".py"] }
-                }],
-                excludeAcceptAllOption: true
-            });
-
-            const finalName = normalizePythonFileName(handle.name, filename);
-            const tab = activeTab();
-            if (tab) tab.fileHandle = handle;
-            const writable = await handle.createWritable();
-            await writable.write(codeEditor.value);
-            await writable.close();
-
-            updateFileName(finalName);
-            markClean();
-            saveCode();
-            setStatus("ready", `Saved · ${finalName}`);
-            return true;
-        } catch (err) {
-            // Closing/cancelling the native dialog is normal.
-            if (err && err.name === "AbortError") return false;
-
-            setStatus("error", "Save Error");
-            outputConsole.innerHTML =
-                `<div class="output-error">Unable to save the Python program to that location.</div>`;
-            return false;
-        }
-    }
-
-    // Android/mobile browsers commonly do not provide showSaveFilePicker.
-    // Do NOT fall back to an <a download> because an HTTP LAN address can
-    // trigger Chrome's "File can't be downloaded securely" warning.
-    const file = new File([codeEditor.value], filename, {
-        type: "text/x-python;charset=utf-8"
-    });
-
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-            await navigator.share({
-                title: filename,
-                text: "Python program",
-                files: [file]
-            });
-            updateFileName(filename);
-            markClean();
-            saveCode();
-            setStatus("ready", `Saved · ${filename}`);
-            return true;
-        } catch (err) {
-            if (err && err.name === "AbortError") return false;
-        }
-    }
-
-    // Mobile fallback: if the browser cannot expose a real Save As picker
-    // and cannot share files, use the normal browser file-save/download flow
-    // only from a secure page. This makes the button functional on more
-    // Android browsers while avoiding the insecure-download warning caused by
-    // serving the app over plain HTTP.
-    if (window.isSecureContext || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-        try {
-            const blob = new Blob([codeEditor.value], { type: "text/x-python;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = filename;
-            link.style.display = "none";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-            updateFileName(filename);
-            markClean();
-            saveCode();
-            setStatus("ready", `Saved · ${filename}`);
-            return true;
-        } catch (err) {
-            setStatus("error", "Save Error");
-            outputConsole.innerHTML =
-                `<div class="output-error">The browser could not save the Python program. Please use Chrome or Edge over HTTPS.</div>`;
-            return false;
-        }
-    }
-
-    setStatus("error", "Secure connection required");
-    outputConsole.innerHTML =
-        `<div class="output-error">Mobile Save As needs HTTPS. Open PyOlympiad using an HTTPS address, then tap Save As again.</div>`;
-    return false;
-}
-
-async function saveCurrentFile() {
-    const tab = activeTab();
-    if (tab && tab.fileHandle && window.showSaveFilePicker) {
-        try {
-            const writable = await tab.fileHandle.createWritable();
-            await writable.write(codeEditor.value);
-            await writable.close();
-            markClean();
-            saveCode();
-            setStatus("ready", `Saved · ${currentFileName}`);
-            return;
-        } catch (err) {
-            if (err && err.name === "AbortError") return;
-        }
-    }
-    await saveAsFile();
-}
-
-async function saveAsFile() {
-    await chooseSaveLocation(currentFileName || "main.py", "Save Python program as");
-}
-
-function renameProgram() {
-    const requestedName = window.prompt("Rename Python program:", currentFileName || "main.py");
-    if (requestedName === null) return;
-
-    const filename = normalizePythonFileName(requestedName, currentFileName || "main.py");
-    updateFileName(filename);
-    saveCode();
-    setStatus("ready", `Program renamed · ${filename}`);
-}
-
-openButton.addEventListener("click", () => {
-    openFileInput.click();
-});
-
-openFileInput.addEventListener("change", () => {
-    const file = openFileInput.files && openFileInput.files[0];
-    openSelectedFile(file);
-});
-
-saveAsButton.addEventListener("click", saveAsFile);
-renameButton.addEventListener("click", renameProgram);
-
-/* EDITOR MENU */
 function closeEditorMenu() {
-    if (!editorMenuPanel) return;
     editorMenuPanel.classList.remove("open");
+    closeLibFlyout();   // the library list always closes with the menu
     menuButton.setAttribute("aria-expanded", "false");
 }
 
-menuButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const isOpen = !editorMenuPanel.classList.contains("open");
-    editorMenuPanel.classList.toggle("open", isOpen);
-    menuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+menuButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willOpen = !editorMenuPanel.classList.contains("open");
+    closeLibFlyout();   // always start with the library list closed
+    editorMenuPanel.classList.toggle("open", willOpen);
+    menuButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
 });
 
-editorMenuPanel.addEventListener("click", (event) => {
-    event.stopPropagation();
+document.addEventListener("click", (e) => {
+    if (
+        editorMenuPanel.classList.contains("open") &&
+        !editorMenuPanel.contains(e.target) &&
+        !menuButton.contains(e.target)
+    ) {
+        // The library list lives inside the panel, so clicking anywhere
+        // outside closes both together.
+        closeEditorMenu();
+    }
 });
 
-menuRenameButton.addEventListener("click", () => {
-    renameButton.click();
-    closeEditorMenu();
-});
-
-menuCopyButton.addEventListener("click", () => {
-    copyCodeButton.click();
-    closeEditorMenu();
-});
-
-menuClearButton.addEventListener("click", () => {
-    clearButton.click();
-    closeEditorMenu();
-});
-
-menuResetButton.addEventListener("click", () => {
-    closeEditorMenu();
-    resetButton.click();
-});
-
-menuFontDown.addEventListener("click", () => {
-    fontDown.click();
-    closeEditorMenu();
-});
-
-menuFontUp.addEventListener("click", () => {
-    fontUp.click();
-    closeEditorMenu();
-});
-
-document.addEventListener("click", (event) => {
-    if (!event.target.closest(".editor-menu")) closeEditorMenu();
-});
-
-document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeEditorMenu();
-});
-
-undoButton.addEventListener("click", undoEdit);
-redoButton.addEventListener("click", redoEdit);
-
-function hideInputs() {
-    resetExecutionInputState();
-}
-
-function clearCode() {
-    if (!window.confirm("Clear the code in this file? You can use Undo to bring it back.")) return;
-    hideInputs();
-    resetOutput();
-    replaceAll("");
-    codeEditor.focus();
-}
-
-function resetCode() {
-    if (!window.confirm("Reset this file to the starter Python code?")) return;
-    hideInputs();
-    resetOutput();
-    replaceAll(DEFAULT_CODE);
-
-    // Reset the program back to the original starter state as well.
-    // This keeps the displayed program name in sync with the reset code.
-    updateFileName("main.py");
-    saveCode();
-
-    setStatus("ready", "Reset · main.py");
-    if (!isCoarse) codeEditor.focus();
-}
-
-copyCodeButton.addEventListener("click", () => {
-    copyText(codeEditor.value)
-        .then(() => flashLabel(copyCodeButton, "Copied!"))
-        .catch(() => flashLabel(copyCodeButton, "Failed"));
-});
-
-
-/* PERSISTENCE */
-function saveCode() {
-    syncActiveTab();
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            tabs: fileTabs,
-            activeId: currentTabId
-        }));
-    } catch (e) {}
-}
-function loadCode() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed.tabs) && parsed.tabs.length) {
-                fileTabs = parsed.tabs.filter(tab => tab && tab.id && tab.name && typeof tab.code === "string")
-                    .map(tab => Object.assign({ fileHandle: null }, tab, { fileHandle: null }));
-                if (!fileTabs.length) throw new Error("No valid tabs");
-                currentTabId = fileTabs.some(tab => tab.id === parsed.activeId) ? parsed.activeId : fileTabs[0].id;
-                const tab = activeTab();
-                currentFileName = tab.name;
-                codeEditor.value = tab.code;
-                renderFileTabs();
-                updateFileName(currentFileName);
-                return;
-            }
-            // Backward compatibility with the previous single-file storage format.
-            if (typeof saved === "string" && !saved.trim().startsWith("{")) {
-                codeEditor.value = saved || DEFAULT_CODE;
-                fileTabs[0].code = codeEditor.value;
-            }
-        }
-    } catch (e) {}
-    const tab = activeTab();
-    codeEditor.value = tab.code || DEFAULT_CODE;
-    renderFileTabs();
-    updateFileName(tab.name);
-}
+menuRenameButton.addEventListener("click", () => { closeEditorMenu(); renameCurrentFile(); });
+menuCopyButton.addEventListener("click", copyProgramCode);
+menuClearButton.addEventListener("click", () => { closeEditorMenu(); clearProgram(); });
+menuResetButton.addEventListener("click", () => { closeEditorMenu(); resetProgram(); });
+menuFontDown.addEventListener("click", () => { fontSize -= 1; applyFont(); });
+menuFontUp.addEventListener("click", () => { fontSize += 1; applyFont(); });
 
 /* =========================================================
-   INDENTATION HELPERS
+   EDITOR EVENT LISTENERS
 ========================================================= */
-function getCurrentLineInfo() {
-    const value  = codeEditor.value;
-    const cursor = codeEditor.selectionStart;
-    const lineStart  = value.lastIndexOf("\n", cursor - 1) + 1;
-    const lineEndIdx = value.indexOf("\n", cursor);
-    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
-    return { value, cursor, lineStart, lineEnd, line: value.substring(lineStart, lineEnd) };
-}
-
-function getIndentation(line) {
-    const m = line.match(/^[ \t]*/);
-    return m ? m[0] : "";
-}
-
-function isBlockStart(line) {
-    const t = line.trim();
-    if (!t) return false;
-    return /^(if|elif|else|for|while|def|class|try|except|finally|with|async\s+def|async\s+for|async\s+with)\b.*:\s*(#.*)?$/.test(t);
-}
-
-function findMatchingParentIndent(keyword, currentLineIndex) {
-    const lines = codeEditor.value.split("\n");
-    for (let i = currentLineIndex - 1; i >= 0; i--) {
-        const t = lines[i].trim();
-        if (!t) continue;
-        const indent = getIndentation(lines[i]);
-
-        if (keyword === "else" || keyword === "elif") {
-            if (/^(if|elif|for|while|try|with)\b.*:\s*(#.*)?$/.test(t)) return indent;
-        }
-        if (keyword === "except" || keyword === "finally") {
-            if (/^try\b.*:\s*(#.*)?$/.test(t)) return indent;
-        }
-    }
-    return null;
-}
-
-/* =========================================================
-   KEY HANDLERS
-========================================================= */
-
-/* Tab / Shift+Tab */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    e.preventDefault();
-
-    const value = codeEditor.value;
-    const s  = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-
-    if (s === en && !e.shiftKey) { edit(s, en, "    "); return; }
-
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    let blockEnd = en;
-    if (s === en) {
-        const i = value.indexOf("\n", s);
-        blockEnd = i === -1 ? value.length : i;
-    }
-
-    const block   = value.substring(lineStart, blockEnd);
-    const updated = e.shiftKey
-        ? block.replace(/^ {1,4}/gm, "")
-        : block.replace(/^(?=[^\n])/gm, "    ");
-    if (updated === block) return;
-
-    if (s === en) {
-        const cursor = Math.max(lineStart, s - (block.length - updated.length));
-        edit(lineStart, blockEnd, updated, cursor, cursor);
-    } else {
-        edit(lineStart, blockEnd, updated, lineStart, lineStart + updated.length);
-    }
+codeEditor.addEventListener("input", () => {
+    updateLineNumbers();
+    persistCurrentFile();
+    if (editorSearch.classList.contains("open")) refreshSearch();
+    if (inputMode && !running) syncInputRows();
 });
 
-/* Enter (smart indent) */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
-    e.preventDefault();
-
-    const info = getCurrentLineInfo();
-    const s  = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const beforeCursor = info.line.substring(0, s - info.lineStart);
-    const indent = getIndentation(beforeCursor);
-    const newIndent = isBlockStart(beforeCursor) ? indent + "    " : indent;
-
-    edit(s, en, "\n" + newIndent);
-});
-
-/* Backspace: remove indentation by 4, or delete an empty auto-closed pair */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Backspace" || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (codeEditor.selectionStart !== codeEditor.selectionEnd) return;
-
-    const cursor = codeEditor.selectionStart;
-    if (cursor <= 0) return;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
-    const beforeCursor = value.substring(lineStart, cursor);
-
-    if (/^ +$/.test(beforeCursor)) {
-        e.preventDefault();
-        const remove = beforeCursor.length % 4 === 0 ? 4 : beforeCursor.length % 4;
-        edit(cursor - remove, cursor, "");
-        return;
-    }
-
-    const left = value[cursor - 1], right = value[cursor];
-    if (PAIRS[left] && PAIRS[left] === right) {
-        e.preventDefault();
-        edit(cursor - 1, cursor + 1, "");
-    }
-});
-
-/* Auto-close brackets and quotes, with skip-over */
-const PAIRS   = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'" };
-const CLOSERS = new Set([")", "]", "}", '"', "'"]);
+codeEditor.addEventListener("scroll", syncScroll);
+codeEditor.addEventListener("click", refreshCursor);
+codeEditor.addEventListener("keyup", refreshCursor);
 
 codeEditor.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+    if (e.isComposing) return;
 
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const next = value[s] || "";
-    const prev = value[s - 1] || "";
-
-    // Typing a closing character that is already there: just move past it
-    if (s === en && CLOSERS.has(e.key) && next === e.key) {
-        e.preventDefault();
-        codeEditor.setSelectionRange(s + 1, s + 1);
-        refreshCursor();
-        return;
-    }
-
-    if (!PAIRS[e.key]) return;
-    const close = PAIRS[e.key];
-    const isQuote = e.key === '"' || e.key === "'";
-
-    // Wrap a selection
-    if (s !== en) {
-        e.preventDefault();
-        edit(s, en, e.key + value.substring(s, en) + close, s + 1, en + 1);
-        return;
-    }
-
-    // Don't pair apostrophes inside words (don't, it's) or before text
-    if (isQuote && (/\w/.test(prev) || /\w/.test(next))) return;
-    if (!isQuote && next && !/[\s)\]};,:]/.test(next)) return;
-
-    e.preventDefault();
-    edit(s, s, e.key + close, s + 1, s + 1);
-});
-
-/* else / elif / except / finally auto-align */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== ":") return;
-
-    const info = getCurrentLineInfo();
-    const beforeCursor = info.line.substring(0, info.cursor - info.lineStart);
-    const m = beforeCursor.match(/^([ \t]*)(else|elif|except|finally)\b(.*)$/);
-    if (!m) return;
-
-    const lineIndex = value_lineIndex(info.lineStart);
-    const parentIndent = findMatchingParentIndent(m[2], lineIndex);
-    if (parentIndent === null) return;
-
-    e.preventDefault();
-    edit(info.lineStart, codeEditor.selectionEnd,
-         parentIndent + beforeCursor.substring(m[1].length) + ":");
-});
-function value_lineIndex(lineStart) {
-    return codeEditor.value.substring(0, lineStart).split("\n").length - 1;
-}
-
-/* Ctrl+/ : toggle comments */
-codeEditor.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || (e.key !== "/" && e.key !== "Divide")) return;
-    e.preventDefault();
-
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    const block = value.substring(lineStart, en);
-    const allCommented = block.split("\n").every(l => /^\s*#/.test(l) || l.trim() === "");
-    const updated = allCommented
-        ? block.replace(/^(\s*)# ?/gm, "$1")
-        : block.replace(/^(\s*)/gm, "$1# ");
-
-    if (s === en) {
-        const cursor = Math.max(lineStart, s + (updated.length - block.length));
-        edit(lineStart, en, updated, cursor, cursor);
-    } else {
-        edit(lineStart, en, updated, lineStart, lineStart + updated.length);
-    }
-});
-
-/* Ctrl+D : duplicate line */
-codeEditor.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey) || (e.key !== "d" && e.key !== "D")) return;
-    e.preventDefault();
-    const info = getCurrentLineInfo();
-    edit(info.lineEnd, info.lineEnd, "\n" + info.value.substring(info.lineStart, info.lineEnd));
-});
-
-/* Smart Home */
-codeEditor.addEventListener("keydown", (e) => {
-    if (e.key !== "Home" || e.shiftKey) return;
-    const info = getCurrentLineInfo();
-    const target = info.lineStart + info.line.match(/^[ \t]*/)[0].length;
-    const cursor = codeEditor.selectionStart;
-    if (cursor !== target && cursor !== info.lineStart) {
-        e.preventDefault();
-        codeEditor.setSelectionRange(target, target);
-        refreshCursor();
-    }
-});
-
-/* Ctrl+Enter : run */
-codeEditor.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        runCode();
+        e.stopPropagation();
+        runFlow();
+        return;
+    }
+
+    if (e.key === "Tab") {
+        e.preventDefault();
+        handleTabKey(e.shiftKey);
+        return;
+    }
+
+    if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        handleEnterKey();
+        return;
     }
 });
 
-/* File + editing shortcuts */
-window.addEventListener("keydown", (e) => {
-    const mod = e.ctrlKey || e.metaKey;
-    if (!mod) return;
+/* =========================================================
+   GLOBAL KEYBOARD SHORTCUTS
+========================================================= */
+document.addEventListener("keydown", (e) => {
 
-    if (e.key === "f" || e.key === "F") {
+    // While the package terminal is open, Escape closes it and
+    // editor shortcuts are suppressed so typing stays in the terminal.
+    if (pkgIsOpen()) {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            pkgClosePanel();
+        }
+        return;
+    }
+
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (mod && e.key === "Enter") {
+        e.preventDefault();
+        runFlow();
+    } else if (mod && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         openSearch();
-        return;
-    }
-
-    if (e.key === "s" || e.key === "S") {
+    } else if (mod && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
-        if (e.shiftKey) saveAsFile();
-        else saveCurrentFile();
-        return;
-    }
-
-    if (e.key === "o" || e.key === "O") {
-        e.preventDefault();
-        openFileInput.click();
-        return;
-    }
-
-    if ((e.key === "z" || e.key === "Z") && !e.shiftKey) {
-        e.preventDefault();
-        undoEdit();
-        return;
-    }
-
-    if (e.key === "y" || e.key === "Y" ||
-        ((e.key === "z" || e.key === "Z") && e.shiftKey)) {
-        e.preventDefault();
-        redoEdit();
-    }
-});
-
-/* Paste: normalise line endings, turn tabs into 4 spaces, re-indent on blank indented lines */
-codeEditor.addEventListener("paste", (e) => {
-    let text = (e.clipboardData || window.clipboardData).getData("text");
-    if (!text) return;
-    e.preventDefault();
-
-    text = text.replace(/\r\n?/g, "\n").replace(/\t/g, "    ");
-
-    const s = codeEditor.selectionStart;
-    const en = codeEditor.selectionEnd;
-    const value = codeEditor.value;
-    const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-    const beforeOnLine = value.substring(lineStart, s);
-
-    let inserted = text;
-    const lines = text.split("\n");
-    if (lines.length > 1 && beforeOnLine.length > 0 && beforeOnLine.trim() === "") {
-        inserted = lines.map((l, i) => i === 0 ? l : beforeOnLine + l).join("\n");
-    }
-    edit(s, en, inserted);
-});
-
-/* =========================================================
-   FIND IN CODE (Ctrl+F)
-========================================================= */
-function updateSearchResults(selectMatch = false) {
-    const query = searchInput.value;
-    searchMatches = [];
-    searchIndex = -1;
-    if (!query) {
-        searchCount.textContent = "0/0";
-        return;
-    }
-
-    const value = codeEditor.value;
-    let from = 0;
-    const lowerValue = value.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    while (from <= value.length) {
-        const at = lowerValue.indexOf(lowerQuery, from);
-        if (at === -1) break;
-        searchMatches.push({ start: at, end: at + query.length });
-        from = at + Math.max(query.length, 1);
-    }
-
-    if (!searchMatches.length) {
-        searchCount.textContent = "0/0";
-        return;
-    }
-
-    const cursor = codeEditor.selectionStart;
-    searchIndex = searchMatches.findIndex(m => m.start >= cursor);
-    if (searchIndex < 0) searchIndex = 0;
-    if (selectMatch) selectSearchMatch(searchIndex);
-    else searchCount.textContent = `${searchIndex + 1}/${searchMatches.length}`;
-}
-
-function selectSearchMatch(index) {
-    if (!searchMatches.length) return;
-    searchIndex = (index + searchMatches.length) % searchMatches.length;
-    const match = searchMatches[searchIndex];
-    codeEditor.focus();
-    codeEditor.setSelectionRange(match.start, match.end);
-    const lh = parseFloat(getComputedStyle(codeEditor).lineHeight) || 22;
-    const line = codeEditor.value.substring(0, match.start).split("\n").length;
-    codeEditor.scrollTop = Math.max(0, (line - 1) * lh - codeEditor.clientHeight / 3);
-    syncScroll();
-    refreshCursor();
-    searchCount.textContent = `${searchIndex + 1}/${searchMatches.length}`;
-}
-
-function openSearch() {
-    editorSearch.classList.add("open");
-    searchInput.value = "";
-    updateSearchResults();
-    searchInput.focus();
-}
-function closeSearch() {
-    editorSearch.classList.remove("open");
-    searchInput.value = "";
-    searchMatches = [];
-    searchIndex = -1;
-    searchCount.textContent = "0/0";
-    if (!isCoarse) codeEditor.focus();
-}
-searchInput.addEventListener("input", () => updateSearchResults(true));
-searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        e.preventDefault();
-        selectSearchMatch(searchIndex + (e.shiftKey ? -1 : 1));
+        saveProgram();
     } else if (e.key === "Escape") {
-        e.preventDefault();
-        closeSearch();
+        // Esc closes the library list first, then the search bar, then the menu.
+        if (libFlyoutIsOpen()) {
+            closeLibFlyout();
+        } else if (editorSearch.classList.contains("open")) {
+            closeSearch();
+        } else {
+            closeEditorMenu();
+        }
     }
 });
-searchPrev.addEventListener("click", () => selectSearchMatch(searchIndex - 1));
-searchNext.addEventListener("click", () => selectSearchMatch(searchIndex + 1));
-searchClose.addEventListener("click", closeSearch);
-
-/* INPUT / SCROLL / CURSOR EVENTS */
-codeEditor.addEventListener("input", () => {
-    errorLine = null;
-    if (inputMode) syncInputRows();
-    saveCode();
-    updateHighlight();
-    renderGutter();
-    updateCursor();
-});
-
-codeEditor.addEventListener("click",  refreshCursor);
-codeEditor.addEventListener("keyup",  refreshCursor);
-codeEditor.addEventListener("select", refreshCursor);
-codeEditor.addEventListener("scroll", () => { syncScroll(); });
-
-/* OUTPUT BUTTONS */
-copyButton.addEventListener("click", () => {
-    copyText(outputConsole.innerText)
-        .then(() => flashLabel(copyButton, "Copied!"))
-        .catch(() => flashLabel(copyButton, "Failed"));
-});
-clearOutputBtn.addEventListener("click", resetOutput);
-
-/* BUTTONS */
-runButton.addEventListener("click", runCode);
-stopButton.addEventListener("click", stopRun);
-clearButton.addEventListener("click", clearCode);
-resetButton.addEventListener("click", resetCode);
 
 /* =========================================================
-   PHONE LAYOUT: Run / Stop become a round button over the editor
+   INIT
 ========================================================= */
-const phoneQuery    = window.matchMedia("(max-width: 600px)");
-const runControls   = document.getElementById("runControls");
-const headerRight   = document.querySelector(".header-right");
-const editorSection = document.getElementById("editorSection");
-
-function placeRunControls() {
-    const target = phoneQuery.matches ? editorSection : headerRight;
-    if (runControls.parentElement !== target) target.appendChild(runControls);
-}
-if (phoneQuery.addEventListener) phoneQuery.addEventListener("change", placeRunControls);
-
-/* INIT */
-placeRunControls();
-renderFileTabs();
-loadCode();
+loadFiles();
+loadActiveFileIntoEditor();
+renderTabs();
 applyFont();
-updateLineNumbers();
+relayoutRunControls();
 applyLayout();
-window.addEventListener("beforeunload", saveCode);
+setStatus("ready", "Ready");
 </script>
-
 </body>
 </html>
